@@ -8,7 +8,7 @@ if not os.path.exists(dll_path):
     print("No real DLL found, generating minimal .def only", file=sys.stderr)
     # Minimal .def with just custom functions
     with open('forward.def', 'w') as f:
-        f.write('EXPORTS\n  SteamAPI_Init\n  SteamAPI_ISteamApps_BIsSubscribedApp\n')
+        f.write('EXPORTS\n  SteamAPI_Init\n  SteamAPI_ISteamApps_BIsSubscribedApp\n  SteamAPI_ISteamRemoteStorage_FileExists\n  SteamAPI_ISteamRemoteStorage_FileRead\n  SteamAPI_ISteamRemoteStorage_FileWrite\n  SteamAPI_RestartAppIfNecessary\n  SteamInternal_SteamAPI_Init\n')
     sys.exit(0)
 
 pe = pefile.PE(dll_path)
