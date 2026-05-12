@@ -5,6 +5,8 @@
 
 #pragma comment(lib, "Shlwapi.lib")
 
+extern "C" void _init_fn(void);
+
 // Type definitions (not provided by SDK headers in this project)
 typedef unsigned int uint32;
 typedef unsigned long long uint64;
@@ -146,7 +148,6 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
         ParseConfig();
 
         // Initialize trampoline function pointers from the real DLL
-        extern "C" void _init_fn(void);
         _init_fn();
 
         // SteamStub patching goes before any Steam API usage
