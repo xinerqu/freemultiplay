@@ -85,15 +85,18 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <ModuleDefinitionFile>forward.def</ModuleDefinitionFile>
-      <AdditionalDependencies Condition="Exists('steam_api64_o.lib')">steam_api64_o.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalDependencies>Shlwapi.lib;kernel32.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="trampoline_init.c" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="dllmain.def" />
+    <MASM Include="trampolines.asm" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="forward.def" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

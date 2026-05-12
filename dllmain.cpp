@@ -145,6 +145,10 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
         DisableThreadLibraryCalls(hModule);
         ParseConfig();
 
+        // Initialize trampoline function pointers from the real DLL
+        extern void _init_fn(void);
+        _init_fn();
+
         // SteamStub patching goes before any Steam API usage
         InitSteamStub();
     }
