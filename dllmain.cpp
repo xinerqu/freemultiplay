@@ -156,21 +156,11 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
 extern "C"
 {
 
-static void RestoreAppIDForOverlay()
-{
-    if (g_OriginalAppId == 0) return;
-    char buf[32] = { 0 };
-    _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%u", g_OriginalAppId);
-    SetEnvironmentVariableA("SteamAppId", buf);
-}
-
 __declspec(dllexport) bool SteamAPI_Init()
 {
-    SetAppIDEnv(); // Set to 480 for ownership check
+    SetAppIDEnv();
     auto pfn = GetRealProc<decltype(&SteamAPI_Init)>("SteamAPI_Init");
-    bool result = pfn ? pfn() : false;
-    if (result) RestoreAppIDForOverlay(); // Restore real AppID for Overlay
-    return result;
+    return pfn ? pfn() : false;
 }
 
 __declspec(dllexport) bool SteamAPI_RestartAppIfNecessary(uint32 appId)
@@ -216,11 +206,9 @@ __declspec(dllexport) bool SteamAPI_ISteamRemoteStorage_FileWrite(intptr_t insta
 
 __declspec(dllexport) int SteamInternal_SteamAPI_Init(const char* pszVersions, char* pOutErr)
 {
-    SetAppIDEnv(); // Set to 480 for ownership check
+    SetAppIDEnv();
     auto pfn = GetRealProc<decltype(&SteamInternal_SteamAPI_Init)>("SteamInternal_SteamAPI_Init");
-    int result = pfn ? pfn(pszVersions, pOutErr) : 2;
-    if (result == 0) RestoreAppIDForOverlay(); // 0 = success, restore real AppID
-    return result;
+    return pfn ? pfn(pszVersions, pOutErr) : 2; // k_ESteamAPIInitResult_FailedGeneric
 }
 
 } // extern "C"
