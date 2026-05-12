@@ -212,3 +212,7 @@ __declspec(dllexport) int SteamInternal_SteamAPI_Init(const char* pszVersions, c
 }
 
 } // extern "C"
+
+// Forwarding pragmas for all non-custom Steam API functions
+// Each pragma creates a PE forwarder entry -> steam_api64_o.dll
+#include "forward_pragmas.h"
