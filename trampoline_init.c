@@ -1,5 +1,4 @@
 #include <Windows.h>
-
 extern void* fn_GetHSteamPipe;
 extern void* fn_GetHSteamUser;
 extern void* fn_SteamAPI_GetHSteamPipe;

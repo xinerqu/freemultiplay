@@ -92,8 +92,11 @@
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="trampoline_init.c" />
   </ItemGroup>
-  <ItemGroup>
-    <MASM Include="trampolines.asm" />
+  <ItemGroup Condition="'$(Platform)'=='Win32'">
+    <MASM Include="trampolines_x86.asm" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Platform)'=='x64'">
+    <MASM Include="trampolines_x64.asm" />
   </ItemGroup>
   <ItemGroup>
     <None Include="forward.def" />
