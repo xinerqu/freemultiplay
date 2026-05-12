@@ -5,8 +5,6 @@
 
 #pragma comment(lib, "Shlwapi.lib")
 
-extern "C" void _init_fn(void);
-
 // Type definitions (not provided by SDK headers in this project)
 typedef unsigned int uint32;
 typedef unsigned long long uint64;
@@ -147,8 +145,6 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
         DisableThreadLibraryCalls(hModule);
         ParseConfig();
         InitSteamStub();
-        // Note: _init_fn (trampoline resolution) is called lazily from SteamAPI_Init
-        // to avoid LoadLibrary during DllMain (loader lock risk)
     }
     return TRUE;
 }
@@ -162,9 +158,6 @@ extern "C"
 
 __declspec(dllexport) bool SteamAPI_Init()
 {
-    // Initialize trampoline function pointers (lazy, not in DllMain)
-    _init_fn();
-    
     SetAppIDEnv();
     auto pfn = GetRealProc<decltype(&SteamAPI_Init)>("SteamAPI_Init");
     return pfn ? pfn() : false;
