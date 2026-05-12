@@ -5,6 +5,8 @@
 
 #pragma comment(lib, "Shlwapi.lib")
 
+extern "C" void _init_fn(void);
+
 // Type definitions (not provided by SDK headers in this project)
 typedef unsigned int uint32;
 typedef unsigned long long uint64;
@@ -158,6 +160,7 @@ extern "C"
 
 __declspec(dllexport) bool SteamAPI_Init()
 {
+    _init_fn();  // Lazy-load trampoline function pointers (NOT in DllMain)
     SetAppIDEnv();
     auto pfn = GetRealProc<decltype(&SteamAPI_Init)>("SteamAPI_Init");
     return pfn ? pfn() : false;
