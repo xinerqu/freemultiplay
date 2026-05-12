@@ -10863,3 +10863,5 @@ _ret_g_pSteamClientGameServer:
     ret
 g_pSteamClientGameServer ENDP
 
+
+END
