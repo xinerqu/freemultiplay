@@ -19,12 +19,6 @@ jobs:
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
     
-    - name: Generate .lib and .def from real DLL
-      shell: pwsh
-      run: |
-        pip install pefile -q
-        python generate.py
-    
     - name: Build ${{ matrix.arch }}
       run: |
         msbuild freemultiplay.vcxproj -p:Configuration=Release -p:Platform=${{ matrix.arch }} -m
