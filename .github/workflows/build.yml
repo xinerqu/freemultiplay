@@ -19,58 +19,11 @@ jobs:
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
     
-    - name: Build ${{ matrix.arch }}
+    - name: Generate .lib and .def from real DLL
+      shell: pwsh
       run: |
-        msbuild freemultiplay.vcxproj -p:Configuration=Release -p:Platform=${{ matrix.arch }} -m
-    
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: steam_api_${{ matrix.arch }}
-        path: build/${{ matrix.arch }}/steam_api*.dll
-
-  create-release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    
-    steps:
-    - uses: actions/download-artifact@v4
-      with:
-        merge-multiple: true
-    
-    - name: Create release archive
-      run: |
-        mkdir -p release/x86 release/x64
-        cp steam_api.dll release/x86/ 2>/dev/null || true
-        cp steam_api64.dll release/x64/ 2>/dev/null || true
-        cd release && zip -r ../freemultiplay-${{ github.ref_name }}.zip .
-    
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      with:
-        files: freemultiplay-*.zip
-        generate_release_notes: true
-name: Build and Release DLLs
-
-on:
-  push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: windows-2022
-    strategy:
-      matrix:
-        arch: [Win32, x64]
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v2
+        pip install pefile -q
+        python generate.py
     
     - name: Build ${{ matrix.arch }}
       run: |
