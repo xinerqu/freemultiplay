@@ -22,7 +22,11 @@ static HMODULE g_hRealSteam = nullptr;
 static void ParseConfig()
 {
     char iniPath[MAX_PATH] = { 0 };
-    GetModuleFileNameA(GetModuleHandleA("steam_api64.dll"), iniPath, MAX_PATH);
+    #if defined(_M_IX86)
+        GetModuleFileNameA(GetModuleHandleA("steam_api.dll"), iniPath, MAX_PATH);
+    #else
+        GetModuleFileNameA(GetModuleHandleA("steam_api64.dll"), iniPath, MAX_PATH);
+    #endif
     PathRemoveFileSpecA(iniPath);
     strcat_s(iniPath, MAX_PATH, "\\freemultiplay.ini");
 
@@ -52,17 +56,22 @@ static bool LoadRealSteam()
 {
     if (g_hRealSteam) return true;
 
-    // Find steam_api64_o.dll relative to our DLL
+    #if defined(_M_IX86)
+        const char* realDllName = "steam_api_o.dll";
+    #else
+        const char* realDllName = "steam_api64_o.dll";
+    #endif
+
     char modPath[MAX_PATH] = { 0 };
     GetModuleFileNameA(GetModuleHandleA("steam_api64.dll"), modPath, MAX_PATH);
     PathRemoveFileSpecA(modPath);
-    strcat_s(modPath, MAX_PATH, "\\steam_api64_o.dll");
+    strcat_s(modPath, MAX_PATH, "\\");
+    strcat_s(modPath, MAX_PATH, realDllName);
 
     g_hRealSteam = LoadLibraryExA(modPath, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
     if (!g_hRealSteam)
     {
-        // Also try just the filename
-        g_hRealSteam = LoadLibraryExA("steam_api64_o.dll", nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+        g_hRealSteam = LoadLibraryExA(realDllName, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
     }
     return g_hRealSteam != nullptr;
 }

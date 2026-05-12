@@ -27,10 +27,12 @@ This gives you a **complete Steam session** with all features working:
 
 ### 1. Get the files / 准备文件
 
-| File | Description | Source |
-|------|-------------|--------|
-| `steam_api64.dll` | freemultiplay proxy DLL | Download from [Releases](https://github.com/xinerqu/freemultiplay/releases) |
-| `steam_api64_o.dll` | Real Steam API DLL | Copy from any Steam game's directory (the original `steam_api64.dll`, renamed to `steam_api64_o.dll`) |
+| File (64-bit) | File (32-bit) | Description | Source |
+|------|------|-------------|--------|
+| `steam_api64.dll` | `steam_api.dll` | freemultiplay proxy DLL | Download from [Releases](https://github.com/xinerqu/freemultiplay/releases) |
+| `steam_api64_o.dll` | `steam_api_o.dll` | Real Steam API DLL | Copy from any Steam game's directory, rename with `_o` suffix |
+
+> ⚠️ Use the original `steam_api64.dll` from the **same game** you're playing. Version mismatch may cause crashes.
 
 ### 2. Deploy / 部署
 
