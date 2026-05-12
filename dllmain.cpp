@@ -146,12 +146,9 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
     {
         DisableThreadLibraryCalls(hModule);
         ParseConfig();
-
-        // Initialize trampoline function pointers from the real DLL
-        _init_fn();
-
-        // SteamStub patching goes before any Steam API usage
         InitSteamStub();
+        // Note: _init_fn (trampoline resolution) is called lazily from SteamAPI_Init
+        // to avoid LoadLibrary during DllMain (loader lock risk)
     }
     return TRUE;
 }
@@ -165,6 +162,9 @@ extern "C"
 
 __declspec(dllexport) bool SteamAPI_Init()
 {
+    // Initialize trampoline function pointers (lazy, not in DllMain)
+    _init_fn();
+    
     SetAppIDEnv();
     auto pfn = GetRealProc<decltype(&SteamAPI_Init)>("SteamAPI_Init");
     return pfn ? pfn() : false;
