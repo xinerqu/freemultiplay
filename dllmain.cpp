@@ -5,6 +5,8 @@
 
 #pragma comment(lib, "Shlwapi.lib")
 
+#include "forward_pragmas.h"
+
 // Type definitions (not provided by SDK headers in this project)
 typedef unsigned int uint32;
 typedef unsigned long long uint64;
