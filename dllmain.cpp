@@ -5,7 +5,10 @@
 
 #pragma comment(lib, "Shlwapi.lib")
 
-// ============================================================
+// Type definitions (not provided by SDK headers in this project)
+typedef unsigned int uint32;
+typedef unsigned long long uint64;
+typedef uint64 uintp;
 // Configuration
 // ============================================================
 static uint32 g_ForcedAppId = 480;
