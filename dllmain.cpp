@@ -198,21 +198,7 @@ static bool GetSteamPathFromRegistry(char* outPath, size_t pathSize)
 static void InitVulkanOverlay()
 {
     // Set Vulkan instance layer name so Vulkan loader picks up Steam overlay
-    char existingLayers[4096] = { 0 };
-    DWORD size = GetEnvironmentVariableA("VK_INSTANCE_LAYERS", existingLayers, sizeof(existingLayers));
-    if (size > 0 && size < sizeof(existingLayers))
-    {
-        char fullLayers[4096];
-        _snprintf_s(fullLayers, sizeof(fullLayers), _TRUNCATE, "%s;VK_LAYER_VALVE_steam_overlay", existingLayers);
-        SetEnvironmentVariableA("VK_INSTANCE_LAYERS", fullLayers);
-    }
-    else
-    {
-        SetEnvironmentVariableA("VK_INSTANCE_LAYERS", "VK_LAYER_VALVE_steam_overlay");
-    }
-
-    // The JSON manifest has an enable_environment condition
-    SetEnvironmentVariableA("ENABLE_VK_LAYER_VALVE_steam_overlay_1", "1");
+    SetEnvironmentVariableA("VK_INSTANCE_LAYERS", "VK_LAYER_VALVE_steam_overlay");
 
     // Find Steam path and set VK_LAYER_PATH (needed for Vulkan to find the JSON manifest)
     char steamPath[MAX_PATH] = { 0 };
@@ -244,19 +230,7 @@ static void InitVulkanOverlay()
 
     if (found)
     {
-        // Append to existing VK_LAYER_PATH instead of overwriting
-        char existingPath[4096] = { 0 };
-        DWORD pathSize = GetEnvironmentVariableA("VK_LAYER_PATH", existingPath, sizeof(existingPath));
-        if (pathSize > 0 && pathSize < sizeof(existingPath))
-        {
-            char fullPath[4096];
-            _snprintf_s(fullPath, sizeof(fullPath), _TRUNCATE, "%s;%s", existingPath, steamPath);
-            SetEnvironmentVariableA("VK_LAYER_PATH", fullPath);
-        }
-        else
-        {
-            SetEnvironmentVariableA("VK_LAYER_PATH", steamPath);
-        }
+        SetEnvironmentVariableA("VK_LAYER_PATH", steamPath);
     }
 }
 
