@@ -308,3 +308,8 @@ __declspec(dllexport) int SteamInternal_SteamAPI_Init(const char* pszVersions, c
 // Forwarding pragmas for all non-custom Steam API functions
 // Each pragma creates a PE forwarder entry -> steam_api64_o.dll
 #include "forward_pragmas.h"
+
+// Steam_-prefixed forwarders (missing from forward_pragmas.h, needed by Steamworks.NET)
+#pragma comment(linker, "/export:Steam_GetHSteamUserCurrent=" STEAM_API_DLL ".Steam_GetHSteamUserCurrent")
+#pragma comment(linker, "/export:Steam_RegisterInterfaceFuncs=" STEAM_API_DLL ".Steam_RegisterInterfaceFuncs")
+#pragma comment(linker, "/export:Steam_RunCallbacks=" STEAM_API_DLL ".Steam_RunCallbacks")
