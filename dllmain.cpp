@@ -2,6 +2,9 @@
 #include <Shlwapi.h>
 #include <stdio.h>
 #include <string.h>
+#include <atomic>
+#include <intrin.h>
+#include "MinHook.h"
 
 #pragma comment(lib, "Shlwapi.lib")
 
@@ -110,39 +113,84 @@ static void SetAppIDEnv()
 }
 
 // ============================================================
-// SteamStub hook (patches EXE entry point if it has SteamStub marker)
+// SteamStub hook — runtime patch via GetTickCount hook
+// Waits for SteamStub decryption to finish (it calls GetTickCount),
+// then patches a JE -> JMP in the stub's decryption control flow.
 // ============================================================
+
+static std::atomic<uint32_t> g_SteamStubPatchCount{ 0 };
+static constexpr uint32_t STEAM_STUB_PATCH_LIMIT = 1;
+
+// Common SteamStub signature (found in Variant 1 decryption loop):
+//   44 0F B6 F8   movsx edi, r8b
+//   3C 30         cmp  al, 0x30
+//   0F 84 ..      je   rel32       ← patch to unconditional jmp
+static constexpr uint8_t STEAM_STUB_SIGNATURE[] = { 0x44, 0x0F, 0xB6, 0xF8, 0x3C, 0x30, 0x0F, 0x84 };
+
+typedef DWORD(WINAPI* GetTickCount_t)(void);
+static GetTickCount_t g_OrigGetTickCount = nullptr;
+
+static uint8_t* FindSignature(uint8_t* start, uint8_t* end, const uint8_t* sig, size_t sigLen)
+{
+    for (uint8_t* p = start; p < end - sigLen; ++p)
+    {
+        bool match = true;
+        for (size_t i = 0; i < sigLen; ++i)
+        {
+            if (p[i] != sig[i])
+            {
+                match = false;
+                break;
+            }
+        }
+        if (match)
+            return p;
+    }
+    return nullptr;
+}
+
+static DWORD WINAPI SteamStub_HookGetTickCount(void)
+{
+    uint8_t* returnAddr = reinterpret_cast<uint8_t*>(_ReturnAddress());
+    uint8_t* start = returnAddr;
+    uint8_t* end = start + 128;
+
+    DWORD oldProtect = 0;
+    if (!VirtualProtect(start, static_cast<SIZE_T>(end - start), PAGE_EXECUTE_READWRITE, &oldProtect))
+        return g_OrigGetTickCount();
+
+    uint8_t* found = FindSignature(start, end, STEAM_STUB_SIGNATURE, sizeof(STEAM_STUB_SIGNATURE));
+    if (found)
+    {
+        // Patch JE (0F 84 ..) → NOP; JMP (90 E9 ..)
+        // Makes the conditional branch unconditional, altering stub control flow
+        found[6] = 0x90;  // NOP
+        found[7] = 0xE9;  // JMP (rel32, jump offset stays the same)
+
+        uint32_t count = g_SteamStubPatchCount.fetch_add(1, std::memory_order_seq_cst) + 1;
+        if (count >= STEAM_STUB_PATCH_LIMIT)
+        {
+            MH_DisableHook(reinterpret_cast<LPVOID*>(GetTickCount));
+        }
+    }
+
+    VirtualProtect(start, static_cast<SIZE_T>(end - start), oldProtect, &oldProtect);
+    return g_OrigGetTickCount();
+}
+
 static void InitSteamStub()
 {
     if (!g_SteamStubEnabled) return;
 
-    uintp baseAddress = (uintp)GetModuleHandleA(nullptr);
-    if (!baseAddress) return;
+    if (MH_Initialize() != MH_OK)
+        return;
 
-    // Read DOS header
-    IMAGE_DOS_HEADER* dosHeader = (IMAGE_DOS_HEADER*)baseAddress;
-    if (dosHeader->e_magic != IMAGE_DOS_SIGNATURE) return;
+    void* pTarget = reinterpret_cast<void*>(GetTickCount);
+    if (MH_CreateHook(pTarget, SteamStub_HookGetTickCount, reinterpret_cast<LPVOID*>(&g_OrigGetTickCount)) != MH_OK)
+        return;
 
-    // Read NT headers
-    IMAGE_NT_HEADERS* ntHeaders = (IMAGE_NT_HEADERS*)(baseAddress + dosHeader->e_lfanew);
-    if (ntHeaders->Signature != IMAGE_NT_SIGNATURE) return;
-
-    // Entry point address
-    uintp entryPoint = baseAddress + ntHeaders->OptionalHeader.AddressOfEntryPoint;
-
-    // SteamStub marker: JMP rel32 (0xE9) followed by 9 zero bytes
-    // This is a jump to stub code that we want to skip over
-    const uint8_t stubPattern[] = { 0xE9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    if (memcmp((void*)entryPoint, stubPattern, sizeof(stubPattern)) == 0)
-    {
-        // NOP the stub jump
-        DWORD oldProtect = 0;
-        if (VirtualProtect((void*)entryPoint, 10, PAGE_EXECUTE_READWRITE, &oldProtect))
-        {
-            memset((void*)entryPoint, 0x90, 10);
-            VirtualProtect((void*)entryPoint, 10, oldProtect, &oldProtect);
-        }
-    }
+    if (MH_EnableHook(pTarget) != MH_OK)
+        return;
 }
 
 // ============================================================
