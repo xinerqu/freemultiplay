@@ -14,7 +14,6 @@ typedef unsigned char uint8_t;
 // Debug logging
 // ============================================================
 static bool g_DebugLog = false;
-static char g_DebugLogPath[MAX_PATH] = { 0 };
 static void LogDebug(const char* fmt, ...)
 {
     if (!g_DebugLog) return;
@@ -25,7 +24,7 @@ static void LogDebug(const char* fmt, ...)
     va_end(args);
 
     FILE* f = nullptr;
-    if (fopen_s(&f, g_DebugLogPath[0] ? g_DebugLogPath : "freemultiplay_debug.log", "a") == 0 && f)
+    if (fopen_s(&f, "freemultiplay_debug.log", "a") == 0 && f)
     {
         fprintf(f, "[freemultiplay] %s\n", buf);
         fclose(f);
@@ -48,7 +47,6 @@ static void ParseConfig()
         GetModuleFileNameA(GetModuleHandleA("steam_api64.dll"), iniPath, MAX_PATH);
     #endif
     PathRemoveFileSpecA(iniPath);
-    _snprintf_s(g_DebugLogPath, MAX_PATH, _TRUNCATE, "%s\\freemultiplay_debug.log", iniPath);
     strcat_s(iniPath, MAX_PATH, "\\freemultiplay.ini");
 
     DWORD attrs = GetFileAttributesA(iniPath);
@@ -77,7 +75,7 @@ static void ParseConfig()
     {
         // Clear previous log
         FILE* f = nullptr;
-        if (fopen_s(&f, g_DebugLogPath, "w") == 0 && f) fclose(f);
+        if (fopen_s(&f, "freemultiplay_debug.log", "w") == 0 && f) fclose(f);
         LogDebug("Config loaded: AppId=%u ogAppId=%u SteamStub=%d", g_ForcedAppId, g_OriginalAppId, g_SteamStubEnabled);
     }
 }
