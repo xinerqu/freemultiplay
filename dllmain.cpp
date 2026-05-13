@@ -91,13 +91,13 @@ static void SetAppIDEnv()
     _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%u", g_ForcedAppId);
     SetEnvironmentVariableA("SteamAppId", buf);
 
-    // SteamGameId: CGameID format (same as uc-online2)
-    _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%llu", (uint64)g_ForcedAppId);
+    // SteamGameId: CGameID format
+    _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%llu", (uint64)g_ForcedAppId | ((uint64)0x02000001 << 32));
     SetEnvironmentVariableA("SteamGameId", buf);
 
-    // SteamOverlayGameId: use ogAppId if set, otherwise fall back to ForcedAppId
+    // SteamOverlayGameId: use ogAppId with CGameID format if set
     uint32 overlayAppId = (g_OriginalAppId != 0) ? g_OriginalAppId : g_ForcedAppId;
-    _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%llu", (uint64)overlayAppId);
+    _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%llu", (uint64)overlayAppId | ((uint64)0x02000001 << 32));
     SetEnvironmentVariableA("SteamOverlayGameId", buf);
 }
 
