@@ -22,11 +22,13 @@ This approach gives you:
 - ✅ **Facepunch.Steamworks (Unity)** — flat API exports fully forwarded
 - ✅ **EOS (Epic Online Services)** — full Steam session ensures EOS authentication passes
 - ✅ **Multiplayer lobbies, invites, P2P networking**
+- ✅ **SteamStub Variant 1/2** — runtime unpack via GetTickCount hook
 - ⚠️ **Steam Overlay (Shift+Tab)** — may not work on all games (known limitation of proxy DLL approach)
 
 ## Limitations / 已知限制
 
 - **Overlay rendering**: The Steam overlay (Shift+Tab) may not render correctly in Vulkan-based games. Using `--rendering-driver opengl3` launch flag can work around this in Godot games.
+- **SteamStub Variant 3 (AES encryption)**: Games protected by SteamStub Variant 3 (AES-128-CBC) require offline unpacking via [Steamless](https://github.com/atom0s/Steamless) before the proxy DLL can work. The runtime SteamStub hook built into freemultiplay only covers Variant 1/2 (XOR-based) games. See [scripts/ directory](scripts/) for analysis tools to identify the SteamStub variant used by your game.
 
 ## Usage / 使用方法
 
