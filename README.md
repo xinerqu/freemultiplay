@@ -37,7 +37,7 @@ freemultiplay 采用**代理 DLL** 架构：
 
 - **覆盖层渲染问题**：Vulkan 驱动的游戏中 Steam 覆盖层（Shift+Tab）可能无法正常渲染。Godot 引擎的游戏可通过启动参数 `--rendering-driver opengl3` 绕过。
 - **SteamStub Variant 3（AES 加密）**：如果游戏使用 SteamStub Variant 3（AES-128-CBC 加密），需要先用 [Steamless](https://github.com/atom0s/Steamless) 离线脱壳，然后才能使用代理 DLL。freemultiplay 内置的运行时脱壳仅支持 Variant 1/2（XOR 加密）。
-- **遇到新游戏不能跑？** 使用 `scripts/compare_exports.py` 对比原版 DLL 和代理 DLL 的导出表，检查是否有遗漏的导出函数。具体操作方法见 [freemultiplay-support 技能说明](https://github.com/xinerqu/freemultiplay)。
+- **遇到新游戏不能跑？** 使用 `scripts/compare_exports.py` 对比原版 DLL 和代理 DLL 的导出表，检查是否有遗漏的导出函数。
 
 ---
 
@@ -110,7 +110,7 @@ A: 理论上支持所有使用 Steamworks SDK 的引擎——Unreal（UE4/UE5）
 A: 这是正常的。freemultiplay 会将 AppID 设为 480（Spacewar）以利用其联机基础设施。你的游戏实际上使用的是目标游戏的 AppID。
 
 **Q: 遇到新游戏不能运行怎么办？**
-A: 先按照[新游戏兼容排查流程](https://github.com/xinerqu/freemultiplay)检查。通常的原因是代理 DLL 缺少原版 DLL 中的某些导出函数。使用 `scripts/compare_exports.py` 可以快速对比导出表差异。
+A: 通常的原因是代理 DLL 缺少原版 DLL 中的某些导出函数。使用 `scripts/compare_exports.py` 可以快速对比导出表差异。
 
 ---
 
