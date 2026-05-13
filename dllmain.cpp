@@ -177,6 +177,7 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
         DisableThreadLibraryCalls(hModule);
         ParseConfig();
         SetAppIDEnv();  // Set env vars early so overlay can see them
+        LoadRealSteam(); // Load real DLL early so PE forwarders can resolve
         InitSteamStub();
     }
     return TRUE;
