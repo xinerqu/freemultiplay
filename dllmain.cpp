@@ -91,13 +91,13 @@ static void SetAppIDEnv()
     _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%u", g_ForcedAppId);
     SetEnvironmentVariableA("SteamAppId", buf);
 
-    // SteamGameId: CGameID format
-    _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%llu", (uint64)g_ForcedAppId | ((uint64)0x02000001 << 32));
+    // SteamGameId: raw AppID (CGameID format in uc-online2 is just the AppID)
+    _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%llu", (uint64)g_ForcedAppId);
     SetEnvironmentVariableA("SteamGameId", buf);
 
-    // SteamOverlayGameId: use ogAppId with CGameID format if set
+    // SteamOverlayGameId: use ogAppId if set, otherwise fall back to ForcedAppId
     uint32 overlayAppId = (g_OriginalAppId != 0) ? g_OriginalAppId : g_ForcedAppId;
-    _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%llu", (uint64)overlayAppId | ((uint64)0x02000001 << 32));
+    _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%llu", (uint64)overlayAppId);
     SetEnvironmentVariableA("SteamOverlayGameId", buf);
 }
 
@@ -138,6 +138,36 @@ static void InitSteamStub()
 }
 
 // ============================================================
+// LoadGameOverlay (from uc-online2)
+// ============================================================
+static void LoadGameOverlay()
+{
+    // Check if overlay is already loaded
+    #if defined(_M_IX86)
+        if (GetModuleHandleA("GameOverlayRenderer.dll")) return;
+    #else
+        if (GetModuleHandleA("GameOverlayRenderer64.dll")) return;
+    #endif
+
+    // Try to get Steam install path from real DLL
+    typedef const char* (*GetSteamInstallPath_t)();
+    auto pfnGetSteamPath = GetRealProc<GetSteamInstallPath_t>("SteamAPI_GetSteamInstallPath");
+    if (!pfnGetSteamPath) return;
+
+    const char* installPath = pfnGetSteamPath();
+    if (!installPath || installPath[0] == '\0') return;
+
+    char overlayPath[MAX_PATH] = { 0 };
+    #if defined(_M_IX86)
+        _snprintf_s(overlayPath, sizeof(overlayPath), _TRUNCATE, "%s\\GameOverlayRenderer.dll", installPath);
+    #else
+        _snprintf_s(overlayPath, sizeof(overlayPath), _TRUNCATE, "%s\\GameOverlayRenderer64.dll", installPath);
+    #endif
+
+    LoadLibraryExA(overlayPath, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+}
+
+// ============================================================
 // DllMain
 // ============================================================
 BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
@@ -163,7 +193,9 @@ __declspec(dllexport) bool SteamAPI_Init()
 {
     SetAppIDEnv();
     auto pfn = GetRealProc<decltype(&SteamAPI_Init)>("SteamAPI_Init");
-    return pfn ? pfn() : false;
+    bool result = pfn ? pfn() : false;
+    if (result) LoadGameOverlay(); // Load overlay after successful init
+    return result;
 }
 
 __declspec(dllexport) bool SteamAPI_RestartAppIfNecessary(uint32 appId)
@@ -211,7 +243,9 @@ __declspec(dllexport) int SteamInternal_SteamAPI_Init(const char* pszVersions, c
 {
     SetAppIDEnv();
     auto pfn = GetRealProc<decltype(&SteamInternal_SteamAPI_Init)>("SteamInternal_SteamAPI_Init");
-    return pfn ? pfn(pszVersions, pOutErr) : 2; // k_ESteamAPIInitResult_FailedGeneric
+    int result = pfn ? pfn(pszVersions, pOutErr) : 2;
+    if (result == 0) LoadGameOverlay(); // Load overlay after successful init
+    return result;
 }
 
 } // extern "C"
