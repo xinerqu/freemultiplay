@@ -61,7 +61,6 @@
       <OptimizeReferences>true</OptimizeReferences>
       <ModuleDefinitionFile>forward.def</ModuleDefinitionFile>
       <AdditionalDependencies>Shlwapi.lib;kernel32.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
