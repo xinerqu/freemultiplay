@@ -191,10 +191,11 @@ extern "C"
 
 __declspec(dllexport) bool SteamAPI_Init()
 {
-    SetAppIDEnv();
     auto pfn = GetRealProc<decltype(&SteamAPI_Init)>("SteamAPI_Init");
     bool result = pfn ? pfn() : false;
-    if (result) LoadGameOverlay(); // Load overlay after successful init
+    // Set after real init so our ogAppId overwrites whatever the real DLL set
+    SetAppIDEnv();
+    if (result) LoadGameOverlay();
     return result;
 }
 
@@ -241,9 +242,10 @@ __declspec(dllexport) bool SteamAPI_ISteamRemoteStorage_FileWrite(intptr_t insta
 
 __declspec(dllexport) int SteamInternal_SteamAPI_Init(const char* pszVersions, char* pOutErr)
 {
-    SetAppIDEnv();
     auto pfn = GetRealProc<decltype(&SteamInternal_SteamAPI_Init)>("SteamInternal_SteamAPI_Init");
     int result = pfn ? pfn(pszVersions, pOutErr) : 2;
+    // Set after real init so our ogAppId overwrites whatever the real DLL set
+    SetAppIDEnv();
     if (result == 0) LoadGameOverlay(); // Load overlay after successful init
     return result;
 }
