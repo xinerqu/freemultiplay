@@ -20,14 +20,13 @@ This approach gives you:
 - ✅ **Complete Steamworks API compatibility** — all functions are backed by the real Steam API
 - ✅ **Steamworks.NET (Godot)** — flat API exports fully forwarded
 - ✅ **Facepunch.Steamworks (Unity)** — flat API exports fully forwarded
-- ✅ **EOS (Epic Online Services)** — Steam ticket authentication works through real session
+- ✅ **EOS (Epic Online Services)** — full Steam session ensures EOS authentication passes
 - ✅ **Multiplayer lobbies, invites, P2P networking**
 - ⚠️ **Steam Overlay (Shift+Tab)** — may not work on all games (known limitation of proxy DLL approach)
 
 ## Limitations / 已知限制
 
 - **Overlay rendering**: The Steam overlay (Shift+Tab) may not render correctly in Vulkan-based games. Using `--rendering-driver opengl3` launch flag can work around this in Godot games.
-- **EOS-integrated games**: Some games using Epic Online Services with Steam may fail to establish online sessions. This is an EOS-side issue, not a Steam API issue.
 
 ## Usage / 使用方法
 
