@@ -5,17 +5,19 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
 {
     if (dwReason == DLL_PROCESS_ATTACH)
     {
-        // Try to show a message box so we know DLL is loaded
-        ::MessageBoxA(nullptr, "freemultiplay test DLL loaded!", "freemultiplay", MB_OK);
+        FILE* f = nullptr;
+        if (fopen_s(&f, "test_dll_loaded.txt", "w") == 0 && f)
+        {
+            fprintf(f, "minimal test DLL loaded\n");
+            fclose(f);
+        }
         DisableThreadLibraryCalls(hModule);
     }
     return TRUE;
 }
 
-// Export the most common Steam API functions so the game can import them
 extern "C"
 {
-    __declspec(dllexport) bool __stdcall SteamAPI_Init() { return false; }
-    __declspec(dllexport) bool __stdcall SteamAPI_RestartAppIfNecessary(unsigned int) { return false; }
-    __declspec(dllexport) bool __stdcall SteamAPI_ISteamApps_BIsSubscribedApp(void*, unsigned int) { return true; }
+    __declspec(dllexport) bool SteamAPI_Init() { return false; }
+    __declspec(dllexport) bool SteamAPI_RestartAppIfNecessary(unsigned int a) { return false; }
 }
