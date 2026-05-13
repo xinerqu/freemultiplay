@@ -1,80 +1,95 @@
 # freemultiplay
 
-**freemultiplay** is a lightweight Steam API proxy DLL that lets you play games with modified Steam AppID for multiplayer/lan functionality. It forwards all Steam API calls to the real `steam_api64_o.dll`, intercepting only the few functions that need modification.
+**freemultiplay** 是一个轻量级 Steam API 代理 DLL，通过修改游戏使用的 Steam AppID 来解锁免费联机功能。它代理所有 Steam API 请求，拦截少量需要修改的函数，其余全部转发给真实的 `steam_api64_o.dll`，从而保持 100% 的 API 兼容性。
 
-**freemultiplay** 是一个轻量级 Steam API 代理 DLL，通过修改 Steam AppID 实现联机功能。它将所有 Steam API 调用转发给真实的 `steam_api64_o.dll`，只拦截少数需要修改的函数。
+*English: A lightweight Steam API proxy DLL that enables free multiplayer by forwarding Steam API calls to the real DLL, intercepting only the few functions that need modification.*
 
-## How it works / 实现原理
+---
 
-freemultiplay uses a **proxy DLL** architecture:
+## 实现原理 / How it works
 
-- `steam_api64.dll` (freemultiplay) → loads `steam_api64_o.dll` (real Steam API)
-- **~99% of functions** are forwarded to `steam_api64_o.dll` via linker exports
-- **Only 7 functions** are implemented custom:
-  - `SteamAPI_Init` / `SteamInternal_SteamAPI_Init` — set AppID env before/after init
-  - `BIsSubscribedApp` — always return true (bypass AppID ownership checks)
-  - `FileExists` / `FileRead` / `FileWrite` — local file fallback for cloud saves
-  - `RestartAppIfNecessary` — always return false
+freemultiplay 采用**代理 DLL** 架构：
 
-This approach gives you:
-- ✅ **Complete Steamworks API compatibility** — all functions are backed by the real Steam API
-- ✅ **Steamworks.NET (Godot)** — flat API exports fully forwarded
-- ✅ **Facepunch.Steamworks (Unity)** — flat API exports fully forwarded
-- ✅ **EOS (Epic Online Services)** — full Steam session ensures EOS authentication passes
-- ✅ **Multiplayer lobbies, invites, P2P networking**
-- ✅ **SteamStub Variant 1/2** — runtime unpack via GetTickCount hook
-- ⚠️ **Steam Overlay (Shift+Tab)** — may not work on all games (known limitation of proxy DLL approach)
+- `steam_api64.dll`（freemultiplay 代理 DLL）→ 加载 `steam_api64_o.dll`（真实的 Steam API DLL）
+- **约 99% 的函数**通过链接器导出转发给 `steam_api64_o.dll`
+- **仅 7 个函数**我们自定义实现：
 
-## Limitations / 已知限制
+| 函数 | 作用 |
+|------|------|
+| `SteamAPI_Init` / `SteamInternal_SteamAPI_Init` | 在初始化前后设置 AppID 环境变量 |
+| `BIsSubscribedApp` | 始终返回 true，绕过 AppID 所有权检查 |
+| `FileExists` / `FileRead` / `FileWrite` | 本地文件回退，解决云存档同步问题 |
+| `RestartAppIfNecessary` | 始终返回 false，防止游戏重启 |
 
-- **Overlay rendering**: The Steam overlay (Shift+Tab) may not render correctly in Vulkan-based games. Using `--rendering-driver opengl3` launch flag can work around this in Godot games.
-- **SteamStub Variant 3 (AES encryption)**: Games protected by SteamStub Variant 3 (AES-128-CBC) require offline unpacking via [Steamless](https://github.com/atom0s/Steamless) before the proxy DLL can work. The runtime SteamStub hook built into freemultiplay only covers Variant 1/2 (XOR-based) games. See [scripts/ directory](scripts/) for analysis tools to identify the SteamStub variant used by your game.
+这个方案带来的好处：
 
-## Usage / 使用方法
+- ✅ **完整的 Steamworks API 兼容性**——所有函数都由真实的 Steam API 提供
+- ✅ **Steamworks.NET（Godot 引擎）**——导出表完整转发
+- ✅ **Facepunch.Steamworks（Unity 引擎）**——导出表完整转发
+- ✅ **EOS（Epic Online Services）**——完整的 Steam 会话确保 EOS 认证通过
+- ✅ **多人联机大厅、邀请、P2P 网络**——全部正常
+- ✅ **SteamStub Variant 1/2**——通过 GetTickCount 钩子运行时脱壳
+- ⚠️ **Steam 覆盖层（Shift+Tab）**——部分游戏可能无法正常渲染（代理 DLL 方案的已知限制）
 
-### 1. Get the files / 准备文件
+---
 
-| File (64-bit) | File (32-bit) | Description | Source |
-|------|------|-------------|--------|
-| `steam_api64.dll` | `steam_api.dll` | freemultiplay proxy DLL | Download from [Releases](https://github.com/xinerqu/freemultiplay/releases) |
-| `steam_api64_o.dll` | `steam_api_o.dll` | Real Steam API DLL | Copy from any Steam game's directory, rename with `_o` suffix |
+## 注意事项 / Limitations
 
-> ⚠️ Use the original `steam_api64.dll` from the **same game** you're playing. Version mismatch may cause crashes.
+- **覆盖层渲染问题**：Vulkan 驱动的游戏中 Steam 覆盖层（Shift+Tab）可能无法正常渲染。Godot 引擎的游戏可通过启动参数 `--rendering-driver opengl3` 绕过。
+- **SteamStub Variant 3（AES 加密）**：如果游戏使用 SteamStub Variant 3（AES-128-CBC 加密），需要先用 [Steamless](https://github.com/atom0s/Steamless) 离线脱壳，然后才能使用代理 DLL。freemultiplay 内置的运行时脱壳仅支持 Variant 1/2（XOR 加密）。
+- **遇到新游戏不能跑？** 使用 `scripts/compare_exports.py` 对比原版 DLL 和代理 DLL 的导出表，检查是否有遗漏的导出函数。具体操作方法见 [freemultiplay-support 技能说明](https://github.com/xinerqu/freemultiplay)。
 
-### 2. Deploy / 部署
+---
 
-Place both files in the game's `steam_api64.dll` directory (usually alongside the game exe, or in the game's Plugins folder for Unity/UE5 games).
+## 使用方法 / Usage
 
-### 3. (Optional) Configure / 配置
+### 1. 准备文件 / Get the files
 
-Create `freemultiplay.ini` in the same directory as `steam_api64.dll`:
+| 64 位文件 | 32 位文件 | 说明 | 来源 |
+|-----------|-----------|------|------|
+| `steam_api64.dll` | `steam_api.dll` | freemultiplay 代理 DLL | 从 [Releases](https://github.com/xinerqu/freemultiplay/releases) 下载 |
+| `steam_api64_o.dll` | `steam_api_o.dll` | 真实的 Steam API DLL | 从任意 Steam 游戏目录复制原版 DLL，重命名加 `_o` 后缀 |
+
+> ⚠️ 建议使用 **目标游戏自带的** 原版 `steam_api64.dll` 改名，版本不匹配可能导致崩溃。
+
+### 2. 部署 / Deploy
+
+将两个文件放入游戏的 DLL 目录（通常是游戏 EXE 所在目录，Unity/UE5 游戏也可能是 Plugins 文件夹）。
+
+### 3. 配置（可选）/ Configure (optional)
+
+在与 `steam_api64.dll` 同目录下创建 `freemultiplay.ini`：
 
 ```ini
 [Settings]
-; Target AppID (default: 480 = Spacewar)
+; 目标 AppID（默认 480 = Spacewar）
 AppId=480
-; Original AppID (for overlay display, optional)
+; 游戏原始 AppID（仅用于覆盖层显示，可选）
 ogAppId=0
-; Enable SteamStub patching (default: true)
+; 启用 SteamStub 运行时脱壳（默认 true）
 SteamStub=true
 ```
 
-If no config file exists, defaults are: `AppId=480`, `SteamStub=true`.
+如果不创建配置文件，默认值为 `AppId=480`、`SteamStub=true`。
 
-### 4. Launch / 启动
+### 4. 启动 / Launch
 
-Start the game directly. No launcher needed.
+直接启动游戏即可，无需启动器。
 
-## Build / 编译
+---
+
+## 编译 / Build
 
 ```bash
 msbuild freemultiplay.vcxproj -p:Configuration=Release -p:Platform=Win32 -m
 msbuild freemultiplay.vcxproj -p:Configuration=Release -p:Platform=x64 -m
 ```
 
-Output: `build/Win32/steam_api.dll` (32-bit) and `build/x64/steam_api64.dll` (64-bit)
+输出：`build/Win32/steam_api.dll`（32 位）和 `build/x64/steam_api64.dll`（64 位）
 
-## FAQ
+---
+
+## 常见问题 / FAQ
 
 **Q: 所有的 `steam_api64.dll` 都是一样的吗？**
 A: 基本一样，都是 `steamclient64.dll` 的薄包装。用最新的文件即可，旧游戏也能用新文件。
@@ -94,6 +109,11 @@ A: 理论上支持所有使用 Steamworks SDK 的引擎——Unreal（UE4/UE5）
 **Q: 为什么游戏仍然显示"Spacewar"或 AppID 480？**
 A: 这是正常的。freemultiplay 会将 AppID 设为 480（Spacewar）以利用其联机基础设施。你的游戏实际上使用的是目标游戏的 AppID。
 
-## License
+**Q: 遇到新游戏不能运行怎么办？**
+A: 先按照[新游戏兼容排查流程](https://github.com/xinerqu/freemultiplay)检查。通常的原因是代理 DLL 缺少原版 DLL 中的某些导出函数。使用 `scripts/compare_exports.py` 可以快速对比导出表差异。
+
+---
+
+## 许可证 / License
 
 MIT
