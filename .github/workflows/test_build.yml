@@ -12,12 +12,13 @@ jobs:
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
     
-    - name: Build with MSBuild
+    - name: Build test DLL (Win32, no forwarders)
       run: |
-        msbuild test_dll.vcxproj -p:Configuration=Release -p:Platform=Win32 -m
+        cl /c /MT /O2 /GS- /Fo"test_dll.obj" test_dll.cpp
+        link /DLL /OUT:"steam_api.dll" /MACHINE:X86 /SUBSYSTEM:WINDOWS /NXCOMPAT:NO /SAFESEH:NO test_dll.obj
     
     - name: Upload test DLL
       uses: actions/upload-artifact@v4
       with:
         name: test_steam_api_Win32
-        path: build/Win32/steam_api.dll
+        path: steam_api.dll
