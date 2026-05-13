@@ -212,6 +212,14 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
 {
     if (dwReason == DLL_PROCESS_ATTACH)
     {
+        // Test: verify DLL is loaded by writing a marker file
+        FILE* f = nullptr;
+        if (fopen_s(&f, "freemultiplay_loaded.txt", "w") == 0 && f)
+        {
+            fprintf(f, "DLL loaded\n");
+            fclose(f);
+        }
+
         DisableThreadLibraryCalls(hModule);
         ParseConfig();
         LogDebug("DllMain: DLL_PROCESS_ATTACH");
