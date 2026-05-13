@@ -102,6 +102,43 @@ static void SetAppIDEnv()
 }
 
 // ============================================================
+// WriteAppIDFile — writes steam_appid.txt to CWD and EXE dir
+// Many games/Steam check for this file to determine AppID
+// ============================================================
+static void WriteAppIDFile()
+{
+    if (g_ForcedAppId == 0) return;
+
+    char buf[16] = { 0 };
+    _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%u\n", g_ForcedAppId);
+
+    // Write to current working directory
+    FILE* f = nullptr;
+    if (fopen_s(&f, "steam_appid.txt", "wb") == 0 && f)
+    {
+        fwrite(buf, 1, strlen(buf), f);
+        fclose(f);
+    }
+
+    // Write to game EXE's directory
+    char exePath[MAX_PATH] = { 0 };
+    if (GetModuleFileNameA(nullptr, exePath, MAX_PATH) != 0)
+    {
+        if (PathRemoveFileSpecA(exePath))
+        {
+            char fullPath[MAX_PATH] = { 0 };
+            _snprintf_s(fullPath, sizeof(fullPath), _TRUNCATE, "%s\\steam_appid.txt", exePath);
+            f = nullptr;
+            if (fopen_s(&f, fullPath, "wb") == 0 && f)
+            {
+                fwrite(buf, 1, strlen(buf), f);
+                fclose(f);
+            }
+        }
+    }
+}
+
+// ============================================================
 // SteamStub hook (patches EXE entry point if it has SteamStub marker)
 // ============================================================
 static void InitSteamStub()
@@ -176,6 +213,7 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
     {
         DisableThreadLibraryCalls(hModule);
         ParseConfig();
+        WriteAppIDFile(); // Write steam_appid.txt for Steam/game recognition
         SetAppIDEnv();  // Set env vars early so overlay can see them
         LoadRealSteam(); // Load real DLL early so PE forwarders can resolve
         InitSteamStub();
