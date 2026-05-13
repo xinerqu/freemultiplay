@@ -171,19 +171,64 @@ static void LoadGameOverlay()
 // Vulkan overlay layer setup (for Vulkan games like STS2)
 // Steam's Vulkan overlay layer is not auto-injected when the game
 // is not launched through Steam. We set the env vars manually.
+// The layer manifest is at <SteamRoot>/SteamOverlayVulkanLayer64.json
 // ============================================================
+static bool GetSteamPathFromRegistry(char* outPath, size_t pathSize)
+{
+    HKEY hKey = nullptr;
+    LONG result = RegOpenKeyExA(HKEY_LOCAL_MACHINE,
+        "SOFTWARE\\WOW6432Node\\Valve\\Steam", 0, KEY_READ, &hKey);
+    if (result != ERROR_SUCCESS)
+    {
+        result = RegOpenKeyExA(HKEY_LOCAL_MACHINE,
+            "SOFTWARE\\Valve\\Steam", 0, KEY_READ, &hKey);
+        if (result != ERROR_SUCCESS) return false;
+    }
+
+    DWORD type = 0;
+    DWORD size = (DWORD)pathSize;
+    result = RegQueryValueExA(hKey, "InstallPath", nullptr, &type, (LPBYTE)outPath, &size);
+    RegCloseKey(hKey);
+
+    if (result != ERROR_SUCCESS || type != REG_SZ) return false;
+    outPath[pathSize - 1] = '\0';
+    return true;
+}
+
 static void InitVulkanOverlay()
 {
     // Set Vulkan instance layer name so Vulkan loader picks up Steam overlay
     SetEnvironmentVariableA("VK_INSTANCE_LAYERS", "VK_LAYER_VALVE_steam_overlay");
 
-    // Set Vulkan layer search path to Steam root (where the JSON manifest lives)
-    typedef const char* (*GetSteamInstallPath_t)();
-    auto pfnGetPath = GetRealProc<GetSteamInstallPath_t>("SteamAPI_GetSteamInstallPath");
-    if (!pfnGetPath) return;
+    // Find Steam path and set VK_LAYER_PATH (needed for Vulkan to find the JSON manifest)
+    char steamPath[MAX_PATH] = { 0 };
+    bool found = false;
 
-    const char* steamPath = pfnGetPath();
-    if (steamPath && steamPath[0] != '\0')
+    // Try registry first (safe in any context)
+    if (GetSteamPathFromRegistry(steamPath, sizeof(steamPath)))
+    {
+        found = true;
+    }
+    // Then try common paths
+    if (!found)
+    {
+        const char* commonPaths[] = {
+            "C:\\Program Files (x86)\\Steam",
+            "C:\\Steam"
+        };
+        for (int i = 0; i < _countof(commonPaths); i++)
+        {
+            DWORD attrs = GetFileAttributesA(commonPaths[i]);
+            if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY))
+            {
+                strcpy_s(steamPath, sizeof(steamPath), commonPaths[i]);
+                found = true;
+                break;
+            }
+        }
+    }
+
+    if (found)
     {
         SetEnvironmentVariableA("VK_LAYER_PATH", steamPath);
     }
@@ -198,7 +243,8 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
     {
         DisableThreadLibraryCalls(hModule);
         ParseConfig();
-        SetAppIDEnv();  // Set env vars early so overlay can see them
+        SetAppIDEnv();          // Set env vars early so overlay can see them
+        InitVulkanOverlay();    // Set Vulkan overlay env vars before game creates Vulkan instance
         InitSteamStub();
     }
     return TRUE;
@@ -218,7 +264,6 @@ __declspec(dllexport) bool SteamAPI_Init()
     // Set after real init so our ogAppId overwrites whatever the real DLL set
     SetAppIDEnv();
     if (result) {
-        InitVulkanOverlay();
         LoadGameOverlay();
     }
     return result;
@@ -272,8 +317,7 @@ __declspec(dllexport) int SteamInternal_SteamAPI_Init(const char* pszVersions, c
     // Set after real init so our ogAppId overwrites whatever the real DLL set
     SetAppIDEnv();
     if (result == 0) {
-        InitVulkanOverlay();
-        LoadGameOverlay(); // Load overlay after successful init
+        LoadGameOverlay();
     }
     return result;
 }
