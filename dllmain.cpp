@@ -96,7 +96,7 @@ static void SetAppIDEnv()
     SetEnvironmentVariableA("SteamGameId", buf);
 
     // SteamOverlayGameId: use ogAppId if set, otherwise fall back to ForcedAppId
-    uint32_t overlayAppId = (g_OriginalAppId != 0) ? g_OriginalAppId : g_ForcedAppId;
+    uint32 overlayAppId = (g_OriginalAppId != 0) ? g_OriginalAppId : g_ForcedAppId;
     _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%llu", (uint64)overlayAppId);
     SetEnvironmentVariableA("SteamOverlayGameId", buf);
 }
