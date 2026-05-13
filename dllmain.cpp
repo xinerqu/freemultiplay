@@ -90,53 +90,51 @@ static void SetAppIDEnv()
     char buf[32] = { 0 };
     _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%u", g_ForcedAppId);
     SetEnvironmentVariableA("SteamAppId", buf);
+
+    // SteamGameId: CGameID format (same as uc-online2)
+    _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%llu", (uint64)g_ForcedAppId);
     SetEnvironmentVariableA("SteamGameId", buf);
 
-    if (g_OriginalAppId != 0)
-    {
-        _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%llu", (uint64)g_OriginalAppId | ((uint64)0x02000001 << 32));
-        SetEnvironmentVariableA("SteamOverlayGameId", buf);
-    }
+    // SteamOverlayGameId: use ogAppId if set, otherwise fall back to ForcedAppId
+    uint32_t overlayAppId = (g_OriginalAppId != 0) ? g_OriginalAppId : g_ForcedAppId;
+    _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%llu", (uint64)overlayAppId);
+    SetEnvironmentVariableA("SteamOverlayGameId", buf);
 }
 
 // ============================================================
-// SteamStub hook (from uc-online2's implementation)
+// SteamStub hook (patches EXE entry point if it has SteamStub marker)
 // ============================================================
 static void InitSteamStub()
 {
     if (!g_SteamStubEnabled) return;
 
-    // Check if the game exe has a SteamStub section
-    char exePath[MAX_PATH] = { 0 };
-    GetModuleFileNameA(nullptr, exePath, MAX_PATH);
+    uintp baseAddress = (uintp)GetModuleHandleA(nullptr);
+    if (!baseAddress) return;
 
-    HANDLE hFile = CreateFileA(exePath, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
-    if (hFile == INVALID_HANDLE_VALUE) return;
+    // Read DOS header
+    IMAGE_DOS_HEADER* dosHeader = (IMAGE_DOS_HEADER*)baseAddress;
+    if (dosHeader->e_magic != IMAGE_DOS_SIGNATURE) return;
 
-    DWORD headerSize = 0;
-    DWORD bytesRead = 0;
-    if (!ReadFile(hFile, &headerSize, 4, &bytesRead, nullptr)) { CloseHandle(hFile); return; }
+    // Read NT headers
+    IMAGE_NT_HEADERS* ntHeaders = (IMAGE_NT_HEADERS*)(baseAddress + dosHeader->e_lfanew);
+    if (ntHeaders->Signature != IMAGE_NT_SIGNATURE) return;
 
-    // Read the rest of the header
-    char* header = (char*)malloc(headerSize);
-    if (!header) { CloseHandle(hFile); return; }
-    SetFilePointer(hFile, 0, nullptr, FILE_BEGIN);
-    ReadFile(hFile, header, headerSize, &bytesRead, nullptr);
-    CloseHandle(hFile);
+    // Entry point address
+    uintp entryPoint = baseAddress + ntHeaders->OptionalHeader.AddressOfEntryPoint;
 
-    // Patch NOP over SteamStub jump
+    // SteamStub marker: JMP rel32 (0xE9) followed by 9 zero bytes
+    // This is a jump to stub code that we want to skip over
     const uint8_t stubPattern[] = { 0xE9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    for (DWORD i = 0; i < headerSize - 10; i++)
+    if (memcmp((void*)entryPoint, stubPattern, sizeof(stubPattern)) == 0)
     {
-        if (memcmp(header + i, stubPattern, 1) == 0)
+        // NOP the stub jump
+        DWORD oldProtect = 0;
+        if (VirtualProtect((void*)entryPoint, 10, PAGE_EXECUTE_READWRITE, &oldProtect))
         {
-            // Found potential SteamStub, NOP it
-            WriteProcessMemory(GetCurrentProcess(), (LPVOID)((uintp)GetModuleHandleA(nullptr) + i),
-                "\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90", 10, nullptr);
-            break;
+            memset((void*)entryPoint, 0x90, 10);
+            VirtualProtect((void*)entryPoint, 10, oldProtect, &oldProtect);
         }
     }
-    free(header);
 }
 
 // ============================================================
