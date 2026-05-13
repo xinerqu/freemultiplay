@@ -168,6 +168,28 @@ static void LoadGameOverlay()
 }
 
 // ============================================================
+// Vulkan overlay layer setup (for Vulkan games like STS2)
+// Steam's Vulkan overlay layer is not auto-injected when the game
+// is not launched through Steam. We set the env vars manually.
+// ============================================================
+static void InitVulkanOverlay()
+{
+    // Set Vulkan instance layer name so Vulkan loader picks up Steam overlay
+    SetEnvironmentVariableA("VK_INSTANCE_LAYERS", "VK_LAYER_VALVE_steam_overlay");
+
+    // Set Vulkan layer search path to Steam root (where the JSON manifest lives)
+    typedef const char* (*GetSteamInstallPath_t)();
+    auto pfnGetPath = GetRealProc<GetSteamInstallPath_t>("SteamAPI_GetSteamInstallPath");
+    if (!pfnGetPath) return;
+
+    const char* steamPath = pfnGetPath();
+    if (steamPath && steamPath[0] != '\0')
+    {
+        SetEnvironmentVariableA("VK_LAYER_PATH", steamPath);
+    }
+}
+
+// ============================================================
 // DllMain
 // ============================================================
 BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
@@ -195,7 +217,10 @@ __declspec(dllexport) bool SteamAPI_Init()
     bool result = pfn ? pfn() : false;
     // Set after real init so our ogAppId overwrites whatever the real DLL set
     SetAppIDEnv();
-    if (result) LoadGameOverlay();
+    if (result) {
+        InitVulkanOverlay();
+        LoadGameOverlay();
+    }
     return result;
 }
 
@@ -246,7 +271,10 @@ __declspec(dllexport) int SteamInternal_SteamAPI_Init(const char* pszVersions, c
     int result = pfn ? pfn(pszVersions, pOutErr) : 2;
     // Set after real init so our ogAppId overwrites whatever the real DLL set
     SetAppIDEnv();
-    if (result == 0) LoadGameOverlay(); // Load overlay after successful init
+    if (result == 0) {
+        InitVulkanOverlay();
+        LoadGameOverlay(); // Load overlay after successful init
+    }
     return result;
 }
 
