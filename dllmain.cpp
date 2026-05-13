@@ -61,7 +61,11 @@ static bool LoadRealSteam()
     #endif
 
     char modPath[MAX_PATH] = { 0 };
-    GetModuleFileNameA(GetModuleHandleA("steam_api64.dll"), modPath, MAX_PATH);
+    #if defined(_M_IX86)
+        GetModuleFileNameA(GetModuleHandleA("steam_api.dll"), modPath, MAX_PATH);
+    #else
+        GetModuleFileNameA(GetModuleHandleA("steam_api64.dll"), modPath, MAX_PATH);
+    #endif
     PathRemoveFileSpecA(modPath);
     strcat_s(modPath, MAX_PATH, "\\");
     strcat_s(modPath, MAX_PATH, realDllName);
