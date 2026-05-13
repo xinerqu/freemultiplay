@@ -10,6 +10,27 @@ typedef unsigned int uint32;
 typedef unsigned long long uint64;
 typedef uint64 uintp;
 typedef unsigned char uint8_t;
+
+// Debug logging
+// ============================================================
+static bool g_DebugLog = false;
+static void LogDebug(const char* fmt, ...)
+{
+    if (!g_DebugLog) return;
+    va_list args;
+    va_start(args, fmt);
+    char buf[512] = { 0 };
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+    FILE* f = nullptr;
+    if (fopen_s(&f, "freemultiplay_debug.log", "a") == 0 && f)
+    {
+        fprintf(f, "[freemultiplay] %s\n", buf);
+        fclose(f);
+    }
+}
+
 // Configuration
 // ============================================================
 static uint32 g_ForcedAppId = 480;
@@ -48,6 +69,15 @@ static void ParseConfig()
     g_OriginalAppId = (uint32)atoi(buf);
 
     g_SteamStubEnabled = GetPrivateProfileIntA("Settings", "SteamStub", 1, iniPath) != 0;
+    g_DebugLog = GetPrivateProfileIntA("Settings", "Debug", 0, iniPath) != 0;
+
+    if (g_DebugLog)
+    {
+        // Clear previous log
+        FILE* f = nullptr;
+        if (fopen_s(&f, "freemultiplay_debug.log", "w") == 0 && f) fclose(f);
+        LogDebug("Config loaded: AppId=%u ogAppId=%u SteamStub=%d", g_ForcedAppId, g_OriginalAppId, g_SteamStubEnabled);
+    }
 }
 
 static bool LoadRealSteam()
@@ -75,6 +105,7 @@ static bool LoadRealSteam()
     {
         g_hRealSteam = LoadLibraryExA(realDllName, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
     }
+    LogDebug("LoadRealSteam: %s %s", g_hRealSteam ? "OK" : "FAILED", modPath);
     return g_hRealSteam != nullptr;
 }
 
@@ -127,13 +158,18 @@ static void InitSteamStub()
     const uint8_t stubPattern[] = { 0xE9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     if (memcmp((void*)entryPoint, stubPattern, sizeof(stubPattern)) == 0)
     {
-        // NOP the stub jump
+        LogDebug("InitSteamStub: found stub pattern at entry, patching...");
         DWORD oldProtect = 0;
         if (VirtualProtect((void*)entryPoint, 10, PAGE_EXECUTE_READWRITE, &oldProtect))
         {
             memset((void*)entryPoint, 0x90, 10);
             VirtualProtect((void*)entryPoint, 10, oldProtect, &oldProtect);
+            LogDebug("InitSteamStub: patched OK");
         }
+    }
+    else
+    {
+        LogDebug("InitSteamStub: no stub pattern found at entry point");
     }
 }
 
@@ -176,9 +212,13 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
     {
         DisableThreadLibraryCalls(hModule);
         ParseConfig();
-        SetAppIDEnv();  // Set env vars early so overlay can see them
-        LoadRealSteam(); // Load real DLL early so PE forwarders can resolve
+        LogDebug("DllMain: DLL_PROCESS_ATTACH");
+        SetAppIDEnv();
+        LogDebug("SetAppIDEnv: SteamAppId=%u SteamOverlayGameId=%u", g_ForcedAppId,
+            (g_OriginalAppId != 0) ? g_OriginalAppId : g_ForcedAppId);
+        LoadRealSteam();
         InitSteamStub();
+        LogDebug("DllMain: init complete");
     }
     return TRUE;
 }
@@ -192,11 +232,20 @@ extern "C"
 
 __declspec(dllexport) bool SteamAPI_Init()
 {
+    LogDebug("SteamAPI_Init: called");
     auto pfn = GetRealProc<decltype(&SteamAPI_Init)>("SteamAPI_Init");
+    if (!pfn) {
+        LogDebug("SteamAPI_Init: GetRealProc FAILED - SteamAPI_Init not found in real DLL");
+        return false;
+    }
     bool result = pfn ? pfn() : false;
+    LogDebug("SteamAPI_Init: real init returned %d", result);
     // Set after real init so our ogAppId overwrites whatever the real DLL set
     SetAppIDEnv();
-    if (result) LoadGameOverlay();
+    if (result) {
+        LogDebug("SteamAPI_Init: loading overlay");
+        LoadGameOverlay();
+    }
     return result;
 }
 
@@ -243,11 +292,20 @@ __declspec(dllexport) bool SteamAPI_ISteamRemoteStorage_FileWrite(intptr_t insta
 
 __declspec(dllexport) int SteamInternal_SteamAPI_Init(const char* pszVersions, char* pOutErr)
 {
+    LogDebug("SteamInternal_SteamAPI_Init: called");
     auto pfn = GetRealProc<decltype(&SteamInternal_SteamAPI_Init)>("SteamInternal_SteamAPI_Init");
+    if (!pfn) {
+        LogDebug("SteamInternal_SteamAPI_Init: GetRealProc FAILED");
+        return 2;
+    }
     int result = pfn ? pfn(pszVersions, pOutErr) : 2;
+    LogDebug("SteamInternal_SteamAPI_Init: real init returned %d", result);
     // Set after real init so our ogAppId overwrites whatever the real DLL set
     SetAppIDEnv();
-    if (result == 0) LoadGameOverlay(); // Load overlay after successful init
+    if (result == 0) {
+        LogDebug("SteamInternal_SteamAPI_Init: loading overlay");
+        LoadGameOverlay(); // Load overlay after successful init
+    }
     return result;
 }
 
