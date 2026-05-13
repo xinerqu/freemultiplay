@@ -16,22 +16,43 @@ static uint32 g_ForcedAppId = 480;
 static uint32 g_OriginalAppId = 0;
 static bool g_SteamStubEnabled = true;
 static HMODULE g_hRealSteam = nullptr;
+static HMODULE g_hSelfModule = nullptr;
+
+// Get our own DLL directory path (trailing backslash included)
+// Uses the hModule saved from DllMain, NOT GetModuleHandleA (more reliable)
+static void GetSelfDir(char* outPath, size_t outSize)
+{
+    outPath[0] = '\0';
+    if (!g_hSelfModule) return;
+    GetModuleFileNameA(g_hSelfModule, outPath, (DWORD)outSize);
+    PathRemoveFileSpecA(outPath);
+    size_t len = strlen(outPath);
+    if (len + 2 < outSize)
+    {
+        outPath[len] = '\\';
+        outPath[len + 1] = '\0';
+    }
+}
+
+// Helper: log diagnostic messages via OutputDebugString
+// Capturable with DebugView (Sysinternals)
+static void DbgLog(const char* msg)
+{
+    OutputDebugStringA("[freemultiplay] ");
+    OutputDebugStringA(msg);
+    OutputDebugStringA("\n");
+}
 
 static void ParseConfig()
 {
     char iniPath[MAX_PATH] = { 0 };
-    #if defined(_M_IX86)
-        GetModuleFileNameA(GetModuleHandleA("steam_api.dll"), iniPath, MAX_PATH);
-    #else
-        GetModuleFileNameA(GetModuleHandleA("steam_api64.dll"), iniPath, MAX_PATH);
-    #endif
-    PathRemoveFileSpecA(iniPath);
-    strcat_s(iniPath, MAX_PATH, "\\freemultiplay.ini");
+    GetSelfDir(iniPath, MAX_PATH);
+    strcat_s(iniPath, MAX_PATH, "freemultiplay.ini");
 
     DWORD attrs = GetFileAttributesA(iniPath);
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
-        // No config, use defaults (AppID=480, no stub)
+        DbgLog("ParseConfig: freemultiplay.ini not found, using defaults");
         g_ForcedAppId = 480;
         g_OriginalAppId = 0;
         g_SteamStubEnabled = false;
@@ -60,20 +81,35 @@ static bool LoadRealSteam()
         const char* realDllName = "steam_api64_o.dll";
     #endif
 
-    char modPath[MAX_PATH] = { 0 };
-    #if defined(_M_IX86)
-        GetModuleFileNameA(GetModuleHandleA("steam_api.dll"), modPath, MAX_PATH);
-    #else
-        GetModuleFileNameA(GetModuleHandleA("steam_api64.dll"), modPath, MAX_PATH);
-    #endif
-    PathRemoveFileSpecA(modPath);
-    strcat_s(modPath, MAX_PATH, "\\");
-    strcat_s(modPath, MAX_PATH, realDllName);
+    char fullPath[MAX_PATH] = { 0 };
+    GetSelfDir(fullPath, MAX_PATH);
+    strcat_s(fullPath, MAX_PATH, realDllName);
 
-    g_hRealSteam = LoadLibraryExA(modPath, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+    char dbgBuf[256] = { 0 };
+    _snprintf_s(dbgBuf, sizeof(dbgBuf), _TRUNCATE, "LoadRealSteam: trying %s", fullPath);
+    DbgLog(dbgBuf);
+
+    // Try from our DLL's directory first
+    g_hRealSteam = LoadLibraryExA(fullPath, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
     if (!g_hRealSteam)
     {
-        g_hRealSteam = LoadLibraryExA(realDllName, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+        DWORD err = GetLastError();
+        _snprintf_s(dbgBuf, sizeof(dbgBuf), _TRUNCATE, "LoadRealSteam: failed from dir (err=%lu), trying bare name", err);
+        DbgLog(dbgBuf);
+
+        // Fallback: let Windows search the standard search path
+        g_hRealSteam = LoadLibraryA(realDllName);
+        if (!g_hRealSteam)
+        {
+            err = GetLastError();
+            _snprintf_s(dbgBuf, sizeof(dbgBuf), _TRUNCATE, "LoadRealSteam: bare name also failed (err=%lu)", err);
+            DbgLog(dbgBuf);
+        }
+    }
+
+    if (g_hRealSteam)
+    {
+        DbgLog("LoadRealSteam: SUCCESS");
     }
     return g_hRealSteam != nullptr;
 }
@@ -174,11 +210,27 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
 {
     if (dwReason == DLL_PROCESS_ATTACH)
     {
+        g_hSelfModule = hModule;
+
+        char dbgBuf[256] = { 0 };
+        GetModuleFileNameA(hModule, dbgBuf, sizeof(dbgBuf));
+        DbgLog(dbgBuf);
+        DbgLog("DllMain: DLL_PROCESS_ATTACH");
+
         DisableThreadLibraryCalls(hModule);
+
         ParseConfig();
+        _snprintf_s(dbgBuf, sizeof(dbgBuf), _TRUNCATE,
+            "DllMain: AppId=%u, ogAppId=%u, SteamStub=%d",
+            g_ForcedAppId, g_OriginalAppId, g_SteamStubEnabled);
+        DbgLog(dbgBuf);
+
         SetAppIDEnv();  // Set env vars early so overlay can see them
+        DbgLog("DllMain: SetAppIDEnv done");
+
         LoadRealSteam(); // Load real DLL early so PE forwarders can resolve
         InitSteamStub();
+        DbgLog("DllMain: init done");
     }
     return TRUE;
 }
