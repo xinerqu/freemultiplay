@@ -102,8 +102,7 @@ static void SetAppIDEnv()
 }
 
 // ============================================================
-// SteamStub hook — scans EXE code section for DRM patterns
-// and NOPs them. Supports multiple SteamStub variants.
+// SteamStub hook (patches EXE entry point if it has SteamStub marker)
 // ============================================================
 static void InitSteamStub()
 {
@@ -120,53 +119,21 @@ static void InitSteamStub()
     IMAGE_NT_HEADERS* ntHeaders = (IMAGE_NT_HEADERS*)(baseAddress + dosHeader->e_lfanew);
     if (ntHeaders->Signature != IMAGE_NT_SIGNATURE) return;
 
-    // 1. Try patching entry point (steamstub_v0: JMP+9 zeros)
+    // Entry point address
     uintp entryPoint = baseAddress + ntHeaders->OptionalHeader.AddressOfEntryPoint;
-    const uint8_t stubV0[] = { 0xE9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    if (memcmp((void*)entryPoint, stubV0, sizeof(stubV0)) == 0)
+
+    // SteamStub marker: JMP rel32 (0xE9) followed by 9 zero bytes
+    // This is a jump to stub code that we want to skip over
+    const uint8_t stubPattern[] = { 0xE9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    if (memcmp((void*)entryPoint, stubPattern, sizeof(stubPattern)) == 0)
     {
+        // NOP the stub jump
         DWORD oldProtect = 0;
         if (VirtualProtect((void*)entryPoint, 10, PAGE_EXECUTE_READWRITE, &oldProtect))
         {
             memset((void*)entryPoint, 0x90, 10);
             VirtualProtect((void*)entryPoint, 10, oldProtect, &oldProtect);
         }
-        return; // Entry point patched, stub disabled
-    }
-
-    // 2. Scan the code section for common SteamStub patterns
-    // These are the actual DRM auth-check signatures, not the entry jump
-    IMAGE_SECTION_HEADER* section = IMAGE_FIRST_SECTION(ntHeaders);
-    for (WORD i = 0; i < ntHeaders->FileHeader.NumberOfSections; i++)
-    {
-        bool isCode = (section[i].Characteristics & (IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_CNT_CODE)) != 0;
-        if (!isCode) continue;
-
-        uint8_t* start = (uint8_t*)(baseAddress + section[i].VirtualAddress);
-        size_t size = section[i].Misc.VirtualSize;
-        uint8_t* end = start + size;
-
-        // Pattern: 0F B6 F8 3C 30 0F 84 XX XX XX XX
-        // movzx edi, al; cmp al, 0x30; je rel32
-        // This is a common SteamStub auth-check signature (32-bit variant)
-        const uint8_t pattern1[] = { 0x0F, 0xB6, 0xF8, 0x3C, 0x30, 0x0F, 0x84 };
-        uint8_t* p = start;
-        while (p < end - (int)sizeof(pattern1))
-        {
-            if (memcmp(p, pattern1, sizeof(pattern1)) == 0)
-            {
-                DWORD oldProtect = 0;
-                if (VirtualProtect(p, 7, PAGE_EXECUTE_READWRITE, &oldProtect))
-                {
-                    memset(p, 0x90, 7);
-                    VirtualProtect(p, 7, oldProtect, &oldProtect);
-                }
-                p += 7;
-                continue;
-            }
-            p++;
-        }
-        break; // Only scan first code section
     }
 }
 
