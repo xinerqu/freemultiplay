@@ -55,8 +55,6 @@ AppId=480
 ogAppId=0
 ; Enable SteamStub patching (default: true)
 SteamStub=true
-; Enable debug logging (generates freemultiplay_debug.log)
-Debug=0
 ```
 
 If no config file exists, defaults are: `AppId=480`, `SteamStub=true`.
