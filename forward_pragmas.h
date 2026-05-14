@@ -20,7 +20,6 @@
 #pragma comment(linker, "/export:SteamAPI_ISteamApps_BGetDLCDataByIndex=" STEAM_API_DLL ".SteamAPI_ISteamApps_BGetDLCDataByIndex")
 #pragma comment(linker, "/export:SteamAPI_ISteamApps_BIsAppInstalled=" STEAM_API_DLL ".SteamAPI_ISteamApps_BIsAppInstalled")
 #pragma comment(linker, "/export:SteamAPI_ISteamApps_BIsCybercafe=" STEAM_API_DLL ".SteamAPI_ISteamApps_BIsCybercafe")
-#pragma comment(linker, "/export:SteamAPI_ISteamApps_BIsDlcInstalled=" STEAM_API_DLL ".SteamAPI_ISteamApps_BIsDlcInstalled")
 #pragma comment(linker, "/export:SteamAPI_ISteamApps_BIsLowViolence=" STEAM_API_DLL ".SteamAPI_ISteamApps_BIsLowViolence")
 #pragma comment(linker, "/export:SteamAPI_ISteamApps_BIsSubscribed=" STEAM_API_DLL ".SteamAPI_ISteamApps_BIsSubscribed")
 #pragma comment(linker, "/export:SteamAPI_ISteamApps_BIsSubscribedFromFamilySharing=" STEAM_API_DLL ".SteamAPI_ISteamApps_BIsSubscribedFromFamilySharing")

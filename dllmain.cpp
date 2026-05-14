@@ -18,6 +18,7 @@ typedef unsigned char uint8_t;
 static uint32 g_ForcedAppId = 480;
 static uint32 g_OriginalAppId = 0;
 static bool g_SteamStubEnabled = true;
+static int g_DLCOverride = 0; // 0=转发, 1=全解锁, -1=全屏蔽
 static HMODULE g_hRealSteam = nullptr;
 static HMODULE g_hSelfModule = nullptr;
 
@@ -63,6 +64,10 @@ static void ParseConfig()
     g_OriginalAppId = (uint32)atoi(buf);
 
     g_SteamStubEnabled = GetPrivateProfileIntA("Settings", "SteamStub", 1, iniPath) != 0;
+
+    g_DLCOverride = GetPrivateProfileIntA("Settings", "DLC", 0, iniPath);
+    if (g_DLCOverride != 1 && g_DLCOverride != -1)
+        g_DLCOverride = 0; // 非法值重置为转发
 }
 
 static bool LoadRealSteam()
@@ -306,6 +311,18 @@ __declspec(dllexport) int SteamInternal_SteamAPI_Init(const char* pszVersions, c
     SetAppIDEnv();
     if (result == 0) LoadGameOverlay(); // Load overlay after successful init
     return result;
+}
+
+__declspec(dllexport) bool SteamAPI_ISteamApps_BIsDlcInstalled(intptr_t instancePtr, uint32 appID)
+{
+    if (g_DLCOverride == 1)
+        return true;  // 全解锁
+    if (g_DLCOverride == -1)
+        return false; // 全屏蔽
+
+    // 转发到真实 DLL
+    auto pfn = GetRealProc<decltype(&SteamAPI_ISteamApps_BIsDlcInstalled)>("SteamAPI_ISteamApps_BIsDlcInstalled");
+    return pfn ? pfn(instancePtr, appID) : false;
 }
 
 } // extern "C"
