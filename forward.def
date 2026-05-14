@@ -1,5 +1,4 @@
 EXPORTS
-  SteamAPI_ISteamApps_BIsSubscribedApp
   SteamAPI_ISteamRemoteStorage_FileExists
   SteamAPI_ISteamRemoteStorage_FileRead
   SteamAPI_ISteamRemoteStorage_FileWrite

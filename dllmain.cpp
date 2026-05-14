@@ -258,13 +258,31 @@ static bool __fastcall VtblHook_BGetDLCDataByIndex(void* thisPtr, int iDLC, uint
 }
 
 // Replacement for BIsSubscribedApp at vtable index 6
-// This is the main method It Takes Two uses to check Full Game Unlock DLC (AppID 1426390).
 // Signature: bool ISteamApps::BIsSubscribedApp(AppId_t appID)
-// NOTE: Always returns true — this is the core "bypass game ownership" function.
-//       DLC control is handled by BIsDlcInstalled, GetDLCCount, BGetDLCDataByIndex only.
+// DLC=-1: whitelist — only allow ForcedAppId & OriginalAppId (blocks Ubisoft Activation etc.)
+// DLC=1:  unlock all
+// DLC=0:  forward to real Steam
 static bool __fastcall VtblHook_BIsSubscribedApp(void* thisPtr, uint32 appID)
 {
-    return true; // Always subscribed — bypass game ownership check
+    if (g_DLCOverride == -1)
+    {
+        // Whitelist: only the spoofed AppId and the real game AppId are permitted
+        if (appID == g_ForcedAppId)
+            return true;
+        if (g_OriginalAppId != 0 && appID == g_OriginalAppId)
+            return true;
+        // Everything else is blocked (Ubisoft Activation, cross-game checks, etc.)
+        return false;
+    }
+    if (g_DLCOverride == 1)
+        return true;
+    // Forward mode
+    if (g_OrigVtbl[VTBL_IDX_BIsSubscribedApp])
+    {
+        auto origFn = (bool(__fastcall*)(void*, uint32))g_OrigVtbl[VTBL_IDX_BIsSubscribedApp];
+        return origFn(thisPtr, appID);
+    }
+    return true;
 }
 
 // Replacement for BIsDlcInstalled at vtable index 7
@@ -411,11 +429,6 @@ __declspec(dllexport) bool SteamAPI_RestartAppIfNecessary(uint32 appId)
     return false; // Never restart
 }
 
-__declspec(dllexport) bool SteamAPI_ISteamApps_BIsSubscribedApp(intptr_t instancePtr, uint32 appId)
-{
-    return true; // Always subscribed — bypass game ownership check
-}
-
 __declspec(dllexport) bool SteamAPI_ISteamRemoteStorage_FileExists(intptr_t instancePtr, const char* pchFile)
 {
     // Try real Steam first
@@ -459,51 +472,6 @@ __declspec(dllexport) int SteamInternal_SteamAPI_Init(const char* pszVersions, c
         LoadGameOverlay(); // Load overlay after successful init
     }
     return result;
-}
-
-__declspec(dllexport) int SteamAPI_ISteamApps_GetDLCCount(intptr_t instancePtr)
-{
-    if (g_DLCOverride == 1)
-        return 5; // 合成数据，让游戏知道有 DLC 存在
-    if (g_DLCOverride == -1)
-        return 0; // 全屏蔽，不暴露任何 DLC
-
-    // 转发到真实 DLL
-    auto pfn = GetRealProc<decltype(&SteamAPI_ISteamApps_GetDLCCount)>("SteamAPI_ISteamApps_GetDLCCount");
-    return pfn ? pfn(instancePtr) : 0;
-}
-
-__declspec(dllexport) bool SteamAPI_ISteamApps_BGetDLCDataByIndex(intptr_t instancePtr, int iDLC, uint32* pAppID, bool* pbAvailable, char* pchName, int cchNameBufferSize)
-{
-    if (g_DLCOverride == 1)
-    {
-        // 生成合成 DLC 数据，让游戏看到有可用 DLC
-        if (pAppID) *pAppID = 1000000 + iDLC;
-        if (pbAvailable) *pbAvailable = true;
-        if (pchName && cchNameBufferSize > 0)
-        {
-            _snprintf_s(pchName, cchNameBufferSize, _TRUNCATE, "DLC %d", iDLC + 1);
-        }
-        return true;
-    }
-    if (g_DLCOverride == -1)
-        return false; // 全屏蔽，不暴露任何 DLC 数据
-
-    // 转发到真实 DLL
-    auto pfn = GetRealProc<decltype(&SteamAPI_ISteamApps_BGetDLCDataByIndex)>("SteamAPI_ISteamApps_BGetDLCDataByIndex");
-    return pfn ? pfn(instancePtr, iDLC, pAppID, pbAvailable, pchName, cchNameBufferSize) : false;
-}
-
-__declspec(dllexport) bool SteamAPI_ISteamApps_BIsDlcInstalled(intptr_t instancePtr, uint32 appID)
-{
-    if (g_DLCOverride == 1)
-        return true;  // 全解锁
-    if (g_DLCOverride == -1)
-        return false; // 全屏蔽
-
-    // 转发到真实 DLL
-    auto pfn = GetRealProc<decltype(&SteamAPI_ISteamApps_BIsDlcInstalled)>("SteamAPI_ISteamApps_BIsDlcInstalled");
-    return pfn ? pfn(instancePtr, appID) : false;
 }
 
 } // extern "C"
