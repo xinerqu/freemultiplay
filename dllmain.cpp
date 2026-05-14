@@ -18,7 +18,7 @@ typedef unsigned char uint8_t;
 static uint32 g_ForcedAppId = 480;
 static uint32 g_OriginalAppId = 0;
 static bool g_SteamStubEnabled = true;
-static int g_DLCOverride = 0; // 0=转发, 1=全解锁, -1=全屏蔽
+static int g_DLCOverride = 0; // 0=转发, 1=全解锁
 static HMODULE g_hRealSteam = nullptr;
 static HMODULE g_hSelfModule = nullptr;
 
@@ -85,8 +85,8 @@ static void ParseConfig()
     g_SteamStubEnabled = GetPrivateProfileIntA("Settings", "SteamStub", 1, iniPath) != 0;
 
     g_DLCOverride = GetPrivateProfileIntA("Settings", "DLC", 0, iniPath);
-    if (g_DLCOverride != 1 && g_DLCOverride != -1)
-        g_DLCOverride = 0; // 非法值重置为转发
+    if (g_DLCOverride != 1)
+        g_DLCOverride = 0; // 非 1 则重置为转发
 }
 
 static bool LoadRealSteam()
@@ -226,8 +226,6 @@ static int __fastcall VtblHook_GetDLCCount(void* thisPtr)
 {
     if (g_DLCOverride == 1)
         return 5;
-    if (g_DLCOverride == -1)
-        return 0;
     if (g_OrigVtbl[VTBL_IDX_GetDLCCount])
     {
         auto origFn = (int(__fastcall*)(void*))g_OrigVtbl[VTBL_IDX_GetDLCCount];
@@ -247,8 +245,6 @@ static bool __fastcall VtblHook_BGetDLCDataByIndex(void* thisPtr, int iDLC, uint
             _snprintf_s(pchName, cchNameBufferSize, _TRUNCATE, "DLC %d", iDLC + 1);
         return true;
     }
-    if (g_DLCOverride == -1)
-        return false;
     if (g_OrigVtbl[VTBL_IDX_BGetDLCDataByIndex])
     {
         auto origFn = (bool(__fastcall*)(void*, int, uint32*, bool*, char*, int))g_OrigVtbl[VTBL_IDX_BGetDLCDataByIndex];
@@ -259,16 +255,10 @@ static bool __fastcall VtblHook_BGetDLCDataByIndex(void* thisPtr, int iDLC, uint
 
 // Replacement for BIsSubscribedApp at vtable index 6
 // Signature: bool ISteamApps::BIsSubscribedApp(AppId_t appID)
-// DLC=-1: block all DLC (BIsDlcInstalled) but allow all BIsSubscribedApp checks
 // DLC=1:  unlock all
 // DLC=0:  forward to real Steam
 static bool __fastcall VtblHook_BIsSubscribedApp(void* thisPtr, uint32 appID)
 {
-    if (g_DLCOverride == -1)
-    {
-        // DLC=-1: only block BIsDlcInstalled, BIsSubscribedApp always returns true
-        return true;
-    }
     if (g_DLCOverride == 1)
         return true;
     // Forward mode
@@ -285,8 +275,6 @@ static bool __fastcall VtblHook_BIsDlcInstalled(void* thisPtr, uint32 appID)
 {
     if (g_DLCOverride == 1)
         return true;
-    if (g_DLCOverride == -1)
-        return false;
     if (g_OrigVtbl[VTBL_IDX_BIsDlcInstalled])
     {
         auto origFn = (bool(__fastcall*)(void*, uint32))g_OrigVtbl[VTBL_IDX_BIsDlcInstalled];
@@ -302,7 +290,7 @@ static bool __fastcall VtblHook_BIsDlcInstalled(void* thisPtr, uint32 appID)
 static void PatchSteamAppsDlcVtable()
 {
     if (g_DLCOverride == 0)
-        return; // No override, keep forwarding
+        return; // No override (0=转发), keep forwarding
 
     static bool s_patched = false;
     if (s_patched)
