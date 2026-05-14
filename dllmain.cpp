@@ -28,13 +28,15 @@ static HMODULE g_hSelfModule = nullptr;
 // ============================================================
 
 // Vtable indices for DLC-related methods (from It Takes Two's SDK)
+//   FF 60 30 => index 6  = BIsSubscribedApp
 //   FF 60 38 => index 7  = BIsDlcInstalled
 //   FF 60 50 => index 10 = GetDLCCount
 //   FF 60 58 => index 11 = BGetDLCDataByIndex (uses r10, same offset)
 // These are derived from the flat API wrapper bytes in the real DLL.
-static constexpr int VTBL_IDX_BIsDlcInstalled    = 7;
-static constexpr int VTBL_IDX_GetDLCCount         = 10;
-static constexpr int VTBL_IDX_BGetDLCDataByIndex  = 11;
+static constexpr int VTBL_IDX_BIsSubscribedApp     = 6;
+static constexpr int VTBL_IDX_BIsDlcInstalled       = 7;
+static constexpr int VTBL_IDX_GetDLCCount            = 10;
+static constexpr int VTBL_IDX_BGetDLCDataByIndex     = 11;
 
 // Saved original vtable entries (indexed by vtable slot)
 static void* g_OrigVtbl[32] = {0};
@@ -251,6 +253,23 @@ static bool __fastcall VtblHook_BGetDLCDataByIndex(void* thisPtr, int iDLC, uint
     return false;
 }
 
+// Replacement for BIsSubscribedApp at vtable index 6
+// This is the main method It Takes Two uses to check Full Game Unlock DLC (AppID 1426390).
+// Signature: bool ISteamApps::BIsSubscribedApp(AppId_t appID)
+static bool __fastcall VtblHook_BIsSubscribedApp(void* thisPtr, uint32 appID)
+{
+    if (g_DLCOverride == 1)
+        return true; // Full unlock — all apps considered subscribed
+    if (g_DLCOverride == -1)
+        return false;
+    if (g_OrigVtbl[VTBL_IDX_BIsSubscribedApp])
+    {
+        auto origFn = (bool(__fastcall*)(void*, uint32))g_OrigVtbl[VTBL_IDX_BIsSubscribedApp];
+        return origFn(thisPtr, appID);
+    }
+    return false;
+}
+
 // Replacement for BIsDlcInstalled at vtable index 7
 static bool __fastcall VtblHook_BIsDlcInstalled(void* thisPtr, uint32 appID)
 {
@@ -309,11 +328,13 @@ static void PatchSteamAppsDlcVtable()
     VirtualProtect(vtable, 256, PAGE_EXECUTE_READWRITE, &oldProtect);
 
     // Save originals and patch
-    g_OrigVtbl[VTBL_IDX_BIsDlcInstalled]     = vtable[VTBL_IDX_BIsDlcInstalled];
-    g_OrigVtbl[VTBL_IDX_GetDLCCount]          = vtable[VTBL_IDX_GetDLCCount];
-    g_OrigVtbl[VTBL_IDX_BGetDLCDataByIndex]   = vtable[VTBL_IDX_BGetDLCDataByIndex];
+    g_OrigVtbl[VTBL_IDX_BIsSubscribedApp]     = vtable[VTBL_IDX_BIsSubscribedApp];
+    g_OrigVtbl[VTBL_IDX_BIsDlcInstalled]      = vtable[VTBL_IDX_BIsDlcInstalled];
+    g_OrigVtbl[VTBL_IDX_GetDLCCount]           = vtable[VTBL_IDX_GetDLCCount];
+    g_OrigVtbl[VTBL_IDX_BGetDLCDataByIndex]    = vtable[VTBL_IDX_BGetDLCDataByIndex];
 
-    vtable[VTBL_IDX_BIsDlcInstalled]    = VtblHook_BIsDlcInstalled;
+    vtable[VTBL_IDX_BIsSubscribedApp]    = VtblHook_BIsSubscribedApp;
+    vtable[VTBL_IDX_BIsDlcInstalled]     = VtblHook_BIsDlcInstalled;
     vtable[VTBL_IDX_GetDLCCount]         = VtblHook_GetDLCCount;
     vtable[VTBL_IDX_BGetDLCDataByIndex]  = VtblHook_BGetDLCDataByIndex;
 
