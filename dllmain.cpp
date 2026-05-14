@@ -259,20 +259,15 @@ static bool __fastcall VtblHook_BGetDLCDataByIndex(void* thisPtr, int iDLC, uint
 
 // Replacement for BIsSubscribedApp at vtable index 6
 // Signature: bool ISteamApps::BIsSubscribedApp(AppId_t appID)
-// DLC=-1: whitelist — only allow ForcedAppId & OriginalAppId (blocks Ubisoft Activation etc.)
+// DLC=-1: block all DLC (BIsDlcInstalled) but allow all BIsSubscribedApp checks
 // DLC=1:  unlock all
 // DLC=0:  forward to real Steam
 static bool __fastcall VtblHook_BIsSubscribedApp(void* thisPtr, uint32 appID)
 {
     if (g_DLCOverride == -1)
     {
-        // Whitelist: only the spoofed AppId and the real game AppId are permitted
-        if (appID == g_ForcedAppId)
-            return true;
-        if (g_OriginalAppId != 0 && appID == g_OriginalAppId)
-            return true;
-        // Everything else is blocked (Ubisoft Activation, cross-game checks, etc.)
-        return false;
+        // DLC=-1: only block BIsDlcInstalled, BIsSubscribedApp always returns true
+        return true;
     }
     if (g_DLCOverride == 1)
         return true;
