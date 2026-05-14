@@ -226,6 +226,8 @@ static int __fastcall VtblHook_GetDLCCount(void* thisPtr)
 {
     if (g_DLCOverride == 1)
         return 5;
+    if (g_DLCOverride == -1)
+        return 0;
     if (g_OrigVtbl[VTBL_IDX_GetDLCCount])
     {
         auto origFn = (int(__fastcall*)(void*))g_OrigVtbl[VTBL_IDX_GetDLCCount];
@@ -245,6 +247,8 @@ static bool __fastcall VtblHook_BGetDLCDataByIndex(void* thisPtr, int iDLC, uint
             _snprintf_s(pchName, cchNameBufferSize, _TRUNCATE, "DLC %d", iDLC + 1);
         return true;
     }
+    if (g_DLCOverride == -1)
+        return false;
     if (g_OrigVtbl[VTBL_IDX_BGetDLCDataByIndex])
     {
         auto origFn = (bool(__fastcall*)(void*, int, uint32*, bool*, char*, int))g_OrigVtbl[VTBL_IDX_BGetDLCDataByIndex];
@@ -256,18 +260,11 @@ static bool __fastcall VtblHook_BGetDLCDataByIndex(void* thisPtr, int iDLC, uint
 // Replacement for BIsSubscribedApp at vtable index 6
 // This is the main method It Takes Two uses to check Full Game Unlock DLC (AppID 1426390).
 // Signature: bool ISteamApps::BIsSubscribedApp(AppId_t appID)
+// NOTE: Always returns true — this is the core "bypass game ownership" function.
+//       DLC control is handled by BIsDlcInstalled, GetDLCCount, BGetDLCDataByIndex only.
 static bool __fastcall VtblHook_BIsSubscribedApp(void* thisPtr, uint32 appID)
 {
-    if (g_DLCOverride == 1)
-        return true; // Full unlock — all apps considered subscribed
-    if (g_DLCOverride == -1)
-        return false;
-    if (g_OrigVtbl[VTBL_IDX_BIsSubscribedApp])
-    {
-        auto origFn = (bool(__fastcall*)(void*, uint32))g_OrigVtbl[VTBL_IDX_BIsSubscribedApp];
-        return origFn(thisPtr, appID);
-    }
-    return false;
+    return true; // Always subscribed — bypass game ownership check
 }
 
 // Replacement for BIsDlcInstalled at vtable index 7
@@ -416,7 +413,7 @@ __declspec(dllexport) bool SteamAPI_RestartAppIfNecessary(uint32 appId)
 
 __declspec(dllexport) bool SteamAPI_ISteamApps_BIsSubscribedApp(intptr_t instancePtr, uint32 appId)
 {
-    return true; // Always subscribed
+    return true; // Always subscribed — bypass game ownership check
 }
 
 __declspec(dllexport) bool SteamAPI_ISteamRemoteStorage_FileExists(intptr_t instancePtr, const char* pchFile)
@@ -468,6 +465,8 @@ __declspec(dllexport) int SteamAPI_ISteamApps_GetDLCCount(intptr_t instancePtr)
 {
     if (g_DLCOverride == 1)
         return 5; // 合成数据，让游戏知道有 DLC 存在
+    if (g_DLCOverride == -1)
+        return 0; // 全屏蔽，不暴露任何 DLC
 
     // 转发到真实 DLL
     auto pfn = GetRealProc<decltype(&SteamAPI_ISteamApps_GetDLCCount)>("SteamAPI_ISteamApps_GetDLCCount");
@@ -487,6 +486,8 @@ __declspec(dllexport) bool SteamAPI_ISteamApps_BGetDLCDataByIndex(intptr_t insta
         }
         return true;
     }
+    if (g_DLCOverride == -1)
+        return false; // 全屏蔽，不暴露任何 DLC 数据
 
     // 转发到真实 DLL
     auto pfn = GetRealProc<decltype(&SteamAPI_ISteamApps_BGetDLCDataByIndex)>("SteamAPI_ISteamApps_BGetDLCDataByIndex");
