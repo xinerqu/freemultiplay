@@ -22,6 +22,23 @@ static int g_DLCOverride = 0; // 0=转发, 1=全解锁, -1=全屏蔽
 static HMODULE g_hRealSteam = nullptr;
 static HMODULE g_hSelfModule = nullptr;
 
+// ============================================================
+// ISteamApps vtable patching — intercept DLC calls at vtable level
+// Required for native C++ games that bypass flat API functions.
+// ============================================================
+
+// Vtable indices for DLC-related methods (from It Takes Two's SDK)
+//   FF 60 38 => index 7  = BIsDlcInstalled
+//   FF 60 50 => index 10 = GetDLCCount
+//   FF 60 58 => index 11 = BGetDLCDataByIndex (uses r10, same offset)
+// These are derived from the flat API wrapper bytes in the real DLL.
+static constexpr int VTBL_IDX_BIsDlcInstalled    = 7;
+static constexpr int VTBL_IDX_GetDLCCount         = 10;
+static constexpr int VTBL_IDX_BGetDLCDataByIndex  = 11;
+
+// Saved original vtable entries (indexed by vtable slot)
+static void* g_OrigVtbl[32] = {0};
+
 // Get our own DLL directory path (trailing backslash included)
 // Uses the hModule saved from DllMain, NOT GetModuleHandleA (more reliable)
 static void GetSelfDir(char* outPath, size_t outSize)
@@ -199,6 +216,111 @@ static void InitSteamStub()
 }
 
 // ============================================================
+// ISteamApps vtable replacement functions (x64 calling convention)
+// ============================================================
+
+// Replacement for GetDLCCount at vtable index 10
+static int __fastcall VtblHook_GetDLCCount(void* thisPtr)
+{
+    if (g_DLCOverride == 1)
+        return 5;
+    if (g_OrigVtbl[VTBL_IDX_GetDLCCount])
+    {
+        auto origFn = (int(__fastcall*)(void*))g_OrigVtbl[VTBL_IDX_GetDLCCount];
+        return origFn(thisPtr);
+    }
+    return 0;
+}
+
+// Replacement for BGetDLCDataByIndex at vtable index 11
+static bool __fastcall VtblHook_BGetDLCDataByIndex(void* thisPtr, int iDLC, uint32* pAppID, bool* pbAvailable, char* pchName, int cchNameBufferSize)
+{
+    if (g_DLCOverride == 1)
+    {
+        if (pAppID) *pAppID = 1000000 + iDLC;
+        if (pbAvailable) *pbAvailable = true;
+        if (pchName && cchNameBufferSize > 0)
+            _snprintf_s(pchName, cchNameBufferSize, _TRUNCATE, "DLC %d", iDLC + 1);
+        return true;
+    }
+    if (g_OrigVtbl[VTBL_IDX_BGetDLCDataByIndex])
+    {
+        auto origFn = (bool(__fastcall*)(void*, int, uint32*, bool*, char*, int))g_OrigVtbl[VTBL_IDX_BGetDLCDataByIndex];
+        return origFn(thisPtr, iDLC, pAppID, pbAvailable, pchName, cchNameBufferSize);
+    }
+    return false;
+}
+
+// Replacement for BIsDlcInstalled at vtable index 7
+static bool __fastcall VtblHook_BIsDlcInstalled(void* thisPtr, uint32 appID)
+{
+    if (g_DLCOverride == 1)
+        return true;
+    if (g_DLCOverride == -1)
+        return false;
+    if (g_OrigVtbl[VTBL_IDX_BIsDlcInstalled])
+    {
+        auto origFn = (bool(__fastcall*)(void*, uint32))g_OrigVtbl[VTBL_IDX_BIsDlcInstalled];
+        return origFn(thisPtr, appID);
+    }
+    return false;
+}
+
+// Patch the ISteamApps instance's vtable to intercept DLC calls.
+// Called after SteamAPI_Init succeeds, when the ISteamApps instance exists.
+// Uses SteamInternal_FindOrCreateUserInterface to obtain the same pointer
+// that the game uses (caching function, returns existing instance).
+static void PatchSteamAppsDlcVtable()
+{
+    if (g_DLCOverride == 0)
+        return; // No override, keep forwarding
+
+    static bool s_patched = false;
+    if (s_patched)
+        return; // Already patched
+    s_patched = true;
+
+    typedef int (__fastcall* GetHSteamUser_t)();
+    typedef void* (__fastcall* FindOrCreate_t)(int hSteamUser, const char* pszVersion);
+
+    auto pfnGetHSteamUser = GetRealProc<GetHSteamUser_t>("SteamAPI_GetHSteamUser");
+    auto pfnFindOrCreate = GetRealProc<FindOrCreate_t>("SteamInternal_FindOrCreateUserInterface");
+    if (!pfnGetHSteamUser || !pfnFindOrCreate)
+        return;
+
+    int hSteamUser = pfnGetHSteamUser();
+    void* pApps = pfnFindOrCreate(hSteamUser, "SteamApps_v008");
+    if (!pApps)
+    {
+        // Fallback: try common Steamworks SDK versions
+        pApps = pfnFindOrCreate(hSteamUser, "STEAMAPPS_INTERFACE_VERSION_008");
+        if (!pApps)
+            pApps = pfnFindOrCreate(hSteamUser, "STEAMAPPS_INTERFACE_VERSION_007");
+        if (!pApps)
+            pApps = pfnFindOrCreate(hSteamUser, "STEAMAPPS_INTERFACE_VERSION_006");
+    }
+    if (!pApps)
+        return;
+
+    void** vtable = *(void***)pApps;
+
+    // Make vtable writable
+    DWORD oldProtect = 0;
+    VirtualProtect(vtable, 256, PAGE_EXECUTE_READWRITE, &oldProtect);
+
+    // Save originals and patch
+    g_OrigVtbl[VTBL_IDX_BIsDlcInstalled]     = vtable[VTBL_IDX_BIsDlcInstalled];
+    g_OrigVtbl[VTBL_IDX_GetDLCCount]          = vtable[VTBL_IDX_GetDLCCount];
+    g_OrigVtbl[VTBL_IDX_BGetDLCDataByIndex]   = vtable[VTBL_IDX_BGetDLCDataByIndex];
+
+    vtable[VTBL_IDX_BIsDlcInstalled]    = VtblHook_BIsDlcInstalled;
+    vtable[VTBL_IDX_GetDLCCount]         = VtblHook_GetDLCCount;
+    vtable[VTBL_IDX_BGetDLCDataByIndex]  = VtblHook_BGetDLCDataByIndex;
+
+    VirtualProtect(vtable, 256, oldProtect, &oldProtect);
+}
+
+// ============================================================
 // LoadGameOverlay (from uc-online2)
 // ============================================================
 static void LoadGameOverlay()
@@ -258,7 +380,11 @@ __declspec(dllexport) bool SteamAPI_Init()
     bool result = pfn ? pfn() : false;
     // Set after real init so our ogAppId overwrites whatever the real DLL set
     SetAppIDEnv();
-    if (result) LoadGameOverlay();
+    if (result)
+    {
+        PatchSteamAppsDlcVtable();
+        LoadGameOverlay();
+    }
     return result;
 }
 
@@ -309,7 +435,11 @@ __declspec(dllexport) int SteamInternal_SteamAPI_Init(const char* pszVersions, c
     int result = pfn ? pfn(pszVersions, pOutErr) : 2;
     // Set after real init so our ogAppId overwrites whatever the real DLL set
     SetAppIDEnv();
-    if (result == 0) LoadGameOverlay(); // Load overlay after successful init
+    if (result == 0)
+    {
+        PatchSteamAppsDlcVtable();
+        LoadGameOverlay(); // Load overlay after successful init
+    }
     return result;
 }
 
