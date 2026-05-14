@@ -313,6 +313,35 @@ __declspec(dllexport) int SteamInternal_SteamAPI_Init(const char* pszVersions, c
     return result;
 }
 
+__declspec(dllexport) int SteamAPI_ISteamApps_GetDLCCount(intptr_t instancePtr)
+{
+    if (g_DLCOverride == 1)
+        return 5; // 合成数据，让游戏知道有 DLC 存在
+
+    // 转发到真实 DLL
+    auto pfn = GetRealProc<decltype(&SteamAPI_ISteamApps_GetDLCCount)>("SteamAPI_ISteamApps_GetDLCCount");
+    return pfn ? pfn(instancePtr) : 0;
+}
+
+__declspec(dllexport) bool SteamAPI_ISteamApps_BGetDLCDataByIndex(intptr_t instancePtr, int iDLC, uint32* pAppID, bool* pbAvailable, char* pchName, int cchNameBufferSize)
+{
+    if (g_DLCOverride == 1)
+    {
+        // 生成合成 DLC 数据，让游戏看到有可用 DLC
+        if (pAppID) *pAppID = 1000000 + iDLC;
+        if (pbAvailable) *pbAvailable = true;
+        if (pchName && cchNameBufferSize > 0)
+        {
+            _snprintf_s(pchName, cchNameBufferSize, _TRUNCATE, "DLC %d", iDLC + 1);
+        }
+        return true;
+    }
+
+    // 转发到真实 DLL
+    auto pfn = GetRealProc<decltype(&SteamAPI_ISteamApps_BGetDLCDataByIndex)>("SteamAPI_ISteamApps_BGetDLCDataByIndex");
+    return pfn ? pfn(instancePtr, iDLC, pAppID, pbAvailable, pchName, cchNameBufferSize) : false;
+}
+
 __declspec(dllexport) bool SteamAPI_ISteamApps_BIsDlcInstalled(intptr_t instancePtr, uint32 appID)
 {
     if (g_DLCOverride == 1)
